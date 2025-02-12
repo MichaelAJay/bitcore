@@ -22,7 +22,6 @@ export function verifyRequestSignature(params: VerificationPayload): boolean {
   const pub = new bitcoreLib.PublicKey(pubKey).toBuffer();
   const messageHash = bitcoreLib.crypto.Hash.sha256sha256(Buffer.from(message));
   if (typeof signature === 'string') {
-    // TODO we should use bitcoreLib.crypto.ECDSA.verify() instead of external dependency.
     return secp256k1.ecdsaVerify(Buffer.from(signature, 'hex'), messageHash, pub);
   } else {
     throw new Error('Signature must exist');
@@ -68,7 +67,8 @@ const authenticateMiddleware: RequestHandler = async (req: Request, res: Respons
       return res.status(401).send('Authentication failed');
     }
     return next();
-  } catch (e) {
+  } catch (e: any) {
+    logger.error('Unexpected error authenticating request: %o', e?.stack || e?.message || e);
     return res.status(401).send('Authentication failed');
   }
 };
