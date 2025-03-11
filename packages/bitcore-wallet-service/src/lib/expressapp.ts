@@ -844,8 +844,9 @@ export class ExpressApp {
 
     router.get('/v1/addresses/', (req, res) => {
       getServerWithAuth(req, res, server => {
-        const opts: { limit?: number; reverse?: boolean } = {};
+        const opts: { limit?: number; reverse?: boolean; skip?: number } = {};
         if (req.query.limit) opts.limit = +req.query.limit;
+        if (req.query.skip) opts.skip = +req.query.skip;
         opts.reverse = req.query.reverse == '1';
 
         server.getMainAddresses(opts, (err, addresses) => {
@@ -1200,6 +1201,8 @@ export class ExpressApp {
 
     router.post('/v1/addresses/scan/', (req, res) => {
       getServerWithAuth(req, res, server => {
+        req.body = req.body || {};
+        req.body.startIdx = server.copayerIsSupportStaff ? Number(req.body.startIdx) : null;
         server.startScan(req.body, (err, started) => {
           if (err) return returnError(err, res, req);
           res.json(started);
@@ -1700,6 +1703,18 @@ export class ExpressApp {
       });
     });
 
+    router.post('/v1/service/ramp/sellQuote', (req, res) => {
+      getServerWithAuth(req, res, async server => {
+        let response;
+        try {
+          response = await server.rampGetSellQuote(req);
+          return res.json(response);
+        } catch (ex) {
+          return returnError(ex, res, req);
+        }
+      });
+    });
+
     router.post('/v1/service/ramp/signedPaymentUrl', (req, res) => {
       getServerWithAuth(req, res, async server => {
         let response;
@@ -1717,6 +1732,17 @@ export class ExpressApp {
       try {
         server = getServer(req, res);
         response = await server.rampGetAssets(req);
+        return res.json(response);
+      } catch (ex) {
+        return returnError(ex, res, req);
+      }
+    });
+
+    router.post('/v1/service/ramp/sellTransactionDetails', async (req, res) => {
+      let server, response;
+      try {
+        server = getServer(req, res);
+        response = await server.rampGetSellTransactionDetails(req);
         return res.json(response);
       } catch (ex) {
         return returnError(ex, res, req);
