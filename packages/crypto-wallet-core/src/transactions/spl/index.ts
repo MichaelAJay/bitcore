@@ -88,7 +88,7 @@ export class SPLTxProvider extends SOLTxProvider {
     };
 
     // Create transaction
-    const transactionMessage = pipe(
+    const transactionMessage = SolKit.pipe(
       SolKit.createTransactionMessage({ version: 'legacy' }),
       (tx) => SolKit.setTransactionMessageFeePayer(fromKeyPair.address, tx),
       (tx) => SolKit.setTransactionMessageLifetimeUsingBlockhash(recentBlockhash, tx),
@@ -169,7 +169,7 @@ interface CreateParams {
 }
 
 interface CreateRecoverNestedAssociatedTokenParams {
-  category: 'recoverNestedAssociatedToken'
+  category: 'recoverNestedAssociatedToken';
   blockHash: string;
   blockHeight: number;
   fromKeyPair: SolKit.KeyPairSigner;
@@ -181,13 +181,13 @@ interface CreateRecoverNestedAssociatedTokenParams {
 }
 
 interface CreateCloseTokenAccountParams {
-  category: 'closeTokenAccount',
+  category: 'closeTokenAccount';
   blockHash: string;
   blockHeight: number;
   fromKeyPair: SolKit.KeyPairSigner;
   ataAddressToClose: string;
-  solRentReturnAddress: string
-  ataAddressToCloseOwnerSolAddress: string
+  solRentReturnAddress: string;
+  ataAddressToCloseOwnerSolAddress: string;
 }
 
 type InstructionType = 'createAssociatedToken' | 'createAssociatedTokenIdempotent' | 'recoverNestedAssociatedToken';
