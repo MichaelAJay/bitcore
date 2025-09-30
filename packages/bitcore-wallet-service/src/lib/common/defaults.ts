@@ -346,13 +346,8 @@ export const Defaults = {
    */
 
   MAX_TX_SIZE_IN_KB_BTC: 100,
-
   MAX_TX_SIZE_IN_KB_BCH: 100,
-
   MAX_TX_SIZE_IN_KB_DOGE: 100,
-
-  // MAX_TX_SIZE_IN_KB_ETH: 500, // not used
-  // MAX_TX_SIZE_IN_KB_XRP: 1000, // not used
 
   MAX_FEE_PER_KB: {
     btc: 10000 * 1000, // 10k sat/b
@@ -433,4 +428,7 @@ export const Defaults = {
     { code: 'JPY', name: 'Japanese Yen' },
     { code: 'NZD', name: 'New Zealand Dollar' }
   ],
+
+  TSS_KEYGEN_SCHEME_VERSION: 1,
+  TSS_SIGGEN_SCHEME_VERSION: 1,
 };
