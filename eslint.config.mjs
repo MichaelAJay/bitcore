@@ -1,6 +1,7 @@
-import { defineConfig } from 'eslint/config';
-import globals from 'globals';
 import js from '@eslint/js';
+import { defineConfig } from 'eslint/config';
+import importPlugin from 'eslint-plugin-import';
+import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig([
@@ -9,7 +10,7 @@ export default defineConfig([
   },
   {
     files: ['**/*.{js,mjs,cjs,ts,mts,cts}'],
-    plugins: { js },
+    plugins: { js, import: importPlugin },
     extends: ['js/recommended'],
     languageOptions: {
       ecmaVersion: 2020,
@@ -52,13 +53,17 @@ export default defineConfig([
           message: 'Use for...of loop or array methods like map/filter instead of forEach'
         }
       ],
-      'sort-imports': ['error', {
-        ignoreCase: true,
-        ignoreDeclarationSort: false,
-        ignoreMemberSort: false,
-        memberSyntaxSortOrder: ['none', 'all', 'multiple', 'single'],
-        allowSeparatedGroups: false
-      }]
+      // 'sort-imports': 'off',
+      // 'import/order': ['error', {
+      //   groups: [
+      //     ['builtin', 'external'],
+      //     ['internal'],
+      //     ['parent', 'sibling', 'index'],
+      //     ['type']
+      //   ],
+      //   'newlines-between': 'always',
+      //   alphabetize: { order: 'asc', caseInsensitive: true }
+      // }]
     }
   },
   {
@@ -81,7 +86,8 @@ export default defineConfig([
     },
     rules: {
       '@typescript-eslint/no-unused-vars': 'off',
-      'sort-imports': 'off'
+      'sort-imports': 'off',
+      'import/order': 'off'
     }
   }
 ]);
