@@ -5,6 +5,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default defineConfig([
+  js.configs.recommended,
   {
     ignores: ['**/node_modules/**', '**/build/**', '**/ts_build/**', 'packages/insight/**']
   },
@@ -53,17 +54,14 @@ export default defineConfig([
           message: 'Use for...of loop or array methods like map/filter instead of forEach'
         }
       ],
-      // 'sort-imports': 'off',
-      // 'import/order': ['error', {
-      //   groups: [
-      //     ['builtin', 'external'],
-      //     ['internal'],
-      //     ['parent', 'sibling', 'index'],
-      //     ['type']
-      //   ],
-      //   'newlines-between': 'always',
-      //   alphabetize: { order: 'asc', caseInsensitive: true }
-      // }]
+      'sort-imports': ['error', {
+        ignoreDeclarationSort: true
+      }],
+      'import/order': ['error', {
+        groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index', 'object', 'type'],
+        'newlines-between': 'always',
+        alphabetize: { order: 'asc', caseInsensitive: true }
+      }]
     }
   },
   {
