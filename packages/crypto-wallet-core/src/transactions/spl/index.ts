@@ -129,7 +129,7 @@ export class SPLTxProvider extends SOLTxProvider {
     };
 
     // Create transaction
-    const transactionMessage = pipe(
+    const transactionMessage = SolKit.pipe(
       SolKit.createTransactionMessage({ version: 'legacy' }),
       (tx) => SolKit.setTransactionMessageFeePayer(fromKeyPair.address, tx),
       (tx) => SolKit.setTransactionMessageLifetimeUsingBlockhash(recentBlockhash, tx),
