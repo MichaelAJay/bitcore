@@ -1,4 +1,5 @@
 import * as prompt from '@clack/prompts';
+
 import type { CommonArgs } from '../../types/cli';
 
 export function command(args: CommonArgs) {

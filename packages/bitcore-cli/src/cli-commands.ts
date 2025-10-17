@@ -1,5 +1,6 @@
 import { type ICliOptions } from '../types/cli';
 import { type IWallet } from '../types/wallet';
+
 import { Utils } from './utils';
 
 export function getCommands(args: { wallet: IWallet, opts?: ICliOptions }) {

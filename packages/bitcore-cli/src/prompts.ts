@@ -1,7 +1,8 @@
 import * as prompt from '@clack/prompts';
-import { BitcoreLib, BitcoreLibLtc } from 'crypto-wallet-core';
-import { Constants } from './constants';
 import { Network } from 'bitcore-wallet-client';
+import { BitcoreLib, BitcoreLibLtc } from 'crypto-wallet-core';
+
+import { Constants } from './constants';
 import { UserCancelled } from './errors';
 import { Utils } from './utils';
 
