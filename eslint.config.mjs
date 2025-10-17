@@ -54,13 +54,23 @@ export default defineConfig([
           message: 'Use for...of loop or array methods like map/filter instead of forEach'
         }
       ],
+      // new
       'sort-imports': ['error', {
-        ignoreDeclarationSort: true
+        ignoreDeclarationSort: true, // rule cannot be auto-fixed
+        ignoreMemberSort: false // import { b, a } from 'X' -> import { a, b } from 'X'
       }],
+      // old
+      // 'sort-imports': ['error', {
+      //   ignoreCase: true,
+      //   ignoreDeclarationSort: false,
+      //   ignoreMemberSort: false,
+      //   memberSyntaxSortOrder: ['none', 'all', 'multiple', 'single'],
+      //   allowSeparatedGroups: false
+      // }],
       'import/order': ['error', {
         groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index', 'object', 'type'],
         'newlines-between': 'always',
-        alphabetize: { order: 'asc', caseInsensitive: true }
+        alphabetize: { order: 'asc', caseInsensitive: false }
       }]
     }
   },
