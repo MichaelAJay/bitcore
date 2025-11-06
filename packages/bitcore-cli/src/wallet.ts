@@ -93,7 +93,7 @@ export class Wallet implements IWallet {
   async getClient(args: {
     mustBeNew?: boolean;
     mustExist?: boolean;
-    doNotComplete?: boolean
+    doNotComplete?: boolean;
   }): Promise<ClientType> {
     const { mustBeNew, mustExist, doNotComplete } = args;
 
@@ -175,7 +175,7 @@ export class Wallet implements IWallet {
     return { key, creds: this.client.toObj() };
   }
 
-  async register(args: { copayerName: string; }) {
+  async register(args: { copayerName: string }) {
     if (!this.client) {
       await this.getClient({ mustExist: true });
     }
@@ -184,7 +184,7 @@ export class Wallet implements IWallet {
     return secret as string | undefined;
   }
 
-  async load(opts?: { doNotComplete?: boolean; allowCache?: boolean; }) {
+  async load(opts?: { doNotComplete?: boolean; allowCache?: boolean }) {
     const { doNotComplete, allowCache } = opts || {};
 
     let walletData: WalletData | EncryptionTypes.IEncrypted = allowCache ? this.#walletData : null;
@@ -244,7 +244,7 @@ export class Wallet implements IWallet {
     return key;
   };
 
-  async save(opts?: { encryptAll?: boolean; }) {
+  async save(opts?: { encryptAll?: boolean }) {
     const { encryptAll } = opts || {};
     try {
       if (!this.#walletData) {
