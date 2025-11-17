@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import 'source-map-support/register';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
