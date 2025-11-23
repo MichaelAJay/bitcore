@@ -479,7 +479,7 @@ const Config = (): any => {
   };
 
   // Override default values with bws.config.js' values, if present
-  const { BITCORE_CONFIG_PATH = '../../', BWS_CONFIG_PATH = '../../' } = process.env;
+  const { BITCORE_CONFIG_PATH = '../../../../', BWS_CONFIG_PATH = '../../' } = process.env;
   let bwsConfig;
 
   try {
@@ -490,6 +490,9 @@ const Config = (): any => {
         bwsConfig = JSON.parse(fs.readFileSync(BITCORE_CONFIG_PATH, 'utf8'));
       }
       bwsConfig = bwsConfig?.bitcoreWalletService;
+      if (bwsConfig) {
+        logger.info(`Using JSON config from ${BITCORE_CONFIG_PATH}`);
+      }
     }
 
     if (!bwsConfig && BWS_CONFIG_PATH) {
@@ -499,6 +502,9 @@ const Config = (): any => {
       } else if (fs.existsSync(BWS_CONFIG_PATH) && BWS_CONFIG_PATH.endsWith('.js')) {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         bwsConfig = require(BWS_CONFIG_PATH);
+      }
+      if (bwsConfig) {
+        logger.info(`Using JS config from ${BWS_CONFIG_PATH}`);
       }
     }
     
