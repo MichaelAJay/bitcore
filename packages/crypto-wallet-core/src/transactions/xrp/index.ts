@@ -72,7 +72,16 @@ export class XRPTxProvider {
   getSignatureObject(params: { tx: string; key: Key }) {
     const { tx, key } = params;
     const txJSON = (xrpl.decode(tx) as unknown) as xrpl.Payment;
-    const signedTx = new xrpl.Wallet(key.pubKey.toUpperCase(), key.privKey.toUpperCase()).sign(txJSON);
+
+
+    let signedTx: { tx_blob: string; hash: string } | undefined;
+    if (Buffer.isBuffer(key.privKey)) {
+      // STRING COPIES PRIVATE KEY - required for new xrpl.Wallet
+      signedTx = new xrpl.Wallet(key.pubKey.toUpperCase(), key.privKey.toString('hex').toUpperCase()).sign(txJSON);
+    } else {
+      signedTx = new xrpl.Wallet(key.pubKey.toUpperCase(), key.privKey.toUpperCase()).sign(txJSON);
+    }
+
     return { signedTransaction: signedTx.tx_blob, hash: signedTx.hash };
   }
 

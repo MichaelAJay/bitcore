@@ -107,16 +107,21 @@ export class ETHTxProvider {
 
   getSignatureObject(params: { tx: string; key: Key }) {
     const { tx, key } = params;
-    // To comply with new ethers
-    let k = key.privKey;
-    if (k.substring(0, 2) != '0x') {
-      k = '0x' + k;
+
+    let signingKey: ethers.SigningKey | undefined;
+    if (Buffer.isBuffer(key.privKey)) {
+      signingKey = new ethers.SigningKey(key.privKey);
+    } else {
+      // To comply with new ethers
+      let k = key.privKey;
+      if (k.substring(0, 2) != '0x') {
+        k = '0x' + k;
+      }
+      signingKey = new ethers.SigningKey(k);
     }
-
-    const signingKey = new ethers.SigningKey(k);
     return signingKey.sign(ethers.keccak256(tx));
-  }
-
+  } 
+  
   getSignature(params: { tx: string; key: Key }) {
     const signatureHex = this.getSignatureObject(params).serialized;
     return signatureHex;
@@ -162,6 +167,7 @@ export class ETHTxProvider {
   }
 
   sign(params: { tx: string; key: Key }) {
+    // What if key.privKey is a buffer?
     const { tx, key } = params;
     const signature = this.getSignatureObject({ tx, key });
     return this.applySignature({ tx, signature });

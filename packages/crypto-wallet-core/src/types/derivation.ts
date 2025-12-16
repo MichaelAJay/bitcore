@@ -1,6 +1,6 @@
 export interface Key {
   address: string;
-  privKey?: string;
+  privKey?: string | Buffer;
   pubKey?: string;
 }
 

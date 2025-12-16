@@ -181,12 +181,17 @@ export class SOLTxProvider {
   }
 
   async sign(params: { tx: string; key: Key }): Promise<string> {
-    const { tx, key } = params;
-    const decodedTx = this.decodeRawTransaction({ rawTx: tx, decodeTransactionMessage: false });
-    const privKeyBytes = SolKit.getBase58Encoder().encode(key.privKey);
-    const keypair = await SolKit.createKeyPairFromPrivateKeyBytes(privKeyBytes);
-    const signedTransaciton = await SolKit.signTransaction([keypair], decodedTx);
-    return SolKit.getBase64EncodedWireTransaction(signedTransaciton);
+    try {
+      const { tx, key } = params;
+      const decodedTx = this.decodeRawTransaction({ rawTx: tx, decodeTransactionMessage: false });
+      // NOTE! If key.privKey not buffer, this results in a stirng copy
+      const keypair = await SolKit.createKeyPairFromPrivateKeyBytes(Buffer.isBuffer(key.privKey) ? key.privKey : SolKit.getBase58Encoder().encode(key.privKey));
+      const signedTransaciton = await SolKit.signTransaction([keypair], decodedTx);
+      return SolKit.getBase64EncodedWireTransaction(signedTransaciton);
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
   }
 
   async signPartially(params) {
