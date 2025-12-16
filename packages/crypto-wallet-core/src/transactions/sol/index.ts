@@ -184,7 +184,7 @@ export class SOLTxProvider {
     try {
       const { tx, key } = params;
       const decodedTx = this.decodeRawTransaction({ rawTx: tx, decodeTransactionMessage: false });
-      // NOTE! If key.privKey not buffer, this results in a stirng copy
+      // NOTE! If key.privKey not buffer, this results in a string copy
       const keypair = await SolKit.createKeyPairFromPrivateKeyBytes(Buffer.isBuffer(key.privKey) ? key.privKey : SolKit.getBase58Encoder().encode(key.privKey));
       const signedTransaciton = await SolKit.signTransaction([keypair], decodedTx);
       return SolKit.getBase64EncodedWireTransaction(signedTransaciton);
