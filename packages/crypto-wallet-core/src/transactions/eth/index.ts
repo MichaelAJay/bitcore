@@ -167,7 +167,6 @@ export class ETHTxProvider {
   }
 
   sign(params: { tx: string; key: Key }) {
-    // What if key.privKey is a buffer?
     const { tx, key } = params;
     const signature = this.getSignatureObject({ tx, key });
     return this.applySignature({ tx, signature });
