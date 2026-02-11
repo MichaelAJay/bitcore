@@ -1,4 +1,4 @@
-import { CryptoRpc } from 'crypto-rpc';
+import { CryptoRpc } from '@bitpay-labs/crypto-rpc';
 import { Cursor } from 'mongodb';
 import logger, { timestamp } from '../../../logger';
 import { CoinEvent, EventStorage } from '../../../models/events';
@@ -12,8 +12,8 @@ import { IEVMNetworkConfig, IExternalSyncConfig } from '../../../types/Config';
 import { IAddressSubscription } from '../../../types/ExternalProvider';
 import { wait } from '../../../utils';
 import { MoralisStateProvider } from '../api/csp';
-import type { EthRpc } from 'crypto-rpc/lib/eth/EthRpc';
-import type { Web3 } from 'crypto-wallet-core';
+import type { EthRpc } from '@bitpay-labs/crypto-rpc/lib/eth/EthRpc';
+import type { Web3 } from '@bitpay-labs/crypto-wallet-core';
 
 export class MoralisP2PWorker extends BaseP2PWorker {
   private chainConfig: IExternalSyncConfig<IEVMNetworkConfig>;
@@ -68,7 +68,7 @@ export class MoralisP2PWorker extends BaseP2PWorker {
             connectionErrors.push(e);
           }
         }
-        logger.error('Unable to connect to web3 %o:%o instance: %o', connectionErrors);
+        logger.error('Unable to connect to web3 %o:%o instance: %o', this.chain, this.network, connectionErrors);
         // Notice we don't unset this.web3. At worst, the old connection starts working again.
       }
     } catch (e) {

@@ -1,6 +1,6 @@
-import * as BitcoreClient from 'bitcore-client';
+import * as BitcoreClient from '@bitpay-labs/bitcore-client';
 import { expect } from 'chai';
-import { Web3, Transactions } from 'crypto-wallet-core';
+import { Web3, Transactions } from '@bitpay-labs/crypto-wallet-core';
 import sinon from 'sinon';
 import config from '../../../src/config';
 import { CacheStorage } from '../../../src/models/cache';
@@ -91,14 +91,13 @@ describe('Polygon', function() {
   });
 
   it('should be able to get block events from geth', async () => {
-    const gethOnlyConfig = { ...chainConfig, provider: chainConfig.providers![0] };
-    const { protocol, host, port } = gethOnlyConfig.provider;
+    const { protocol, host, port } = chainConfig.providers![0];
     const getWeb3Stub = sinon.stub(EVMP2pWorker.prototype, 'getWeb3').resolves({ web3: new Web3(`${protocol}://${host}:${port}`) });
 
     const wallet = await getWallet();
     const addresses = await wallet.getAddresses();
 
-    const worker = new EVMP2pWorker({ chain, network, chainConfig: gethOnlyConfig });
+    const worker = new EVMP2pWorker({ chain, network, chainConfig });
     await worker.setupListeners();
     await worker.connect();
     const sawBlock = new Promise(resolve => worker.events.on('block', resolve));
