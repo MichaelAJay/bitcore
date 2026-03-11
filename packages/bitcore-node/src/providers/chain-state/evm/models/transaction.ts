@@ -451,6 +451,17 @@ export class EVMTransactionModel extends BaseTransaction<IEVMTransaction> {
     return effects;
   }
 
+  /**
+   * Creates an array of effects that are filtered for relevance to a given list of addresses
+   * @param {IEVMTransactionInProcess} tx 
+   * @param {Array<string>} addresses
+   */
+  getEffectsForAddresses(tx: IEVMTransactionInProcess, addresses: Array<string>): Effect[] {
+    const effects = tx.effects?.length ? tx.effects : this.getEffects(tx);
+    const addySet = new Set(addresses.map(a => a.toLowerCase()));
+    return effects.filter(effect => addySet.has(effect.to.toLowerCase()) || addySet.has(effect.from.toLowerCase()));
+  }
+
   _getEffectForAbiType(abi: IAbiDecodedData, to: string, from: string, callStack: string): Effect | undefined {
     // Check that the params are valid before parsing
     if (!to || !from) return;
