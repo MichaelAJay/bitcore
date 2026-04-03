@@ -1,9 +1,10 @@
 import EventEmitter from 'events';
+import { readFile } from 'fs/promises';
 import { SolKit, SolanaProgram } from '@bitpay-labs/crypto-wallet-core';
 import { pipe } from '@solana/functional';
 import bs58 from 'bs58';
 import { SOL_ERROR_MESSAGES } from './error_messages.js';
-import { parseInstructions } from './transaction-parser.js';
+import { parseInstructions, parseJsonParsedInstructions } from './transaction-parser.js';
 
 const {
   ComputeBudget: SolComputeBudget,
@@ -461,7 +462,37 @@ export class SolRpc {
     if (!txid || !this.isBase58(txid)) {
       return null;
     }
-    const serializedTransactionObject = await this.rpc.getTransaction(SolKit.signature(txid), { ...this._versionedConfig, encoding: 'base64' }).send();
+    // const serializedTransactionObject = await this.rpc.getTransaction(SolKit.signature(txid), { ...this._versionedConfig, encoding: 'base64' }).send();
+
+    const storedTxPath = '/Users/bpmj/dev/bitcore/.idea/storedTransaction';
+    // try {
+    //   const body =
+    //     serializedTransactionObject == null
+    //       ? 'transaction not found'
+    //       : JSON.stringify(
+    //         serializedTransactionObject,
+    //         (_, v) => (typeof v === 'bigint' ? v.toString() : v),
+    //         2
+    //       );
+    //   await writeFile(storedTxPath, body, 'utf8');
+    // } catch (err) {
+    //   console.error(`SolRpc.getTransaction: could not write debug snapshot to ${storedTxPath}:`, err);
+    // }
+
+    let serializedTransactionObject;
+    try {
+      const raw = (await readFile(storedTxPath, 'utf8')).trim();
+      if (!raw || raw === 'transaction not found') {
+        console.log(raw === 'transaction not found' ? raw : 'Unexpected result');
+        serializedTransactionObject = null;
+      } else {
+        serializedTransactionObject = JSON.parse(raw);
+      }
+    } catch (err) {
+      console.error(`SolRpc.getTransaction: could not read stored base64 getTransaction snapshot from ${storedTxPath}:`, err);
+      serializedTransactionObject = null;
+    }
+
     if (!serializedTransactionObject?.transaction) {
       return null;
     }
@@ -475,20 +506,58 @@ export class SolRpc {
     const { lookupTablesUsed, ...parsedTransaction } = await this.decodeRawTransaction(decodeRawTransactionParams);
     parsedTransaction.blockTime = Number(blockTime);
     parsedTransaction.slot = Number(slot);
+    const shouldFetchParsedTransaction = lookupTablesUsed || (Array.isArray(meta?.innerInstructions) && meta.innerInstructions.length > 0);
+    const parsedTx = shouldFetchParsedTransaction ? await this.rpc.getTransaction(SolKit.signature(txid), { ...this._versionedConfig, encoding: 'jsonParsed' }).send() : null;
+    parsedTransaction.innerInstructions = this.#parseInnerInstructions(parsedTx?.meta?.innerInstructions);
+
+    const resp = {
+      ...parsedTransaction,
+      meta
+    };
 
     if (lookupTablesUsed) {
-      const parsedTx = await this.rpc.getTransaction(SolKit.signature(txid), { ...this._versionedConfig, encoding: 'jsonParsed' }).send();
+      resp.accountKeys = parsedTx.transaction.message.accountKeys.map(({ pubkey }) => pubkey);
+    }
 
+    return resp;
+  }
+
+  #parseInnerInstructions(jsonParsedInnerInstructions) {
+    const parsedInnerInstructions = {};
+    if (!Array.isArray(jsonParsedInnerInstructions) || jsonParsedInnerInstructions.length === 0) {
+      return parsedInnerInstructions;
+    }
+
+    for (const innerInstructionGroup of jsonParsedInnerInstructions) {
+      const parsedInstructionGroup = parseJsonParsedInstructions(innerInstructionGroup.instructions ?? []);
+      for (const [instructionKey, values] of Object.entries(parsedInstructionGroup)) {
+        if (!parsedInnerInstructions[instructionKey]) {
+          parsedInnerInstructions[instructionKey] = [];
+        }
+
+        for (const value of values) {
+          parsedInnerInstructions[instructionKey].push(this.#addInnerInstructionContext({
+            value,
+            topLevelInstructionIndex: innerInstructionGroup.index
+          }));
+        }
+      }
+    }
+
+    return parsedInnerInstructions;
+  }
+
+  #addInnerInstructionContext({ value, topLevelInstructionIndex }) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
       return {
-        ...parsedTransaction,
-        meta: parsedTx.meta,
-        accountKeys: parsedTx.transaction.message.accountKeys.map(({ pubkey }) => pubkey)
+        topLevelInstructionIndex,
+        ...value
       };
     }
 
     return {
-      ...parsedTransaction,
-      meta
+      topLevelInstructionIndex,
+      value
     };
   }
 
