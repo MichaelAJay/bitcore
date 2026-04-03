@@ -1,5 +1,4 @@
 import EventEmitter from 'events';
-import { readFile } from 'fs/promises';
 import { SolKit, SolanaProgram } from '@bitpay-labs/crypto-wallet-core';
 import { pipe } from '@solana/functional';
 import bs58 from 'bs58';
@@ -462,36 +461,7 @@ export class SolRpc {
     if (!txid || !this.isBase58(txid)) {
       return null;
     }
-    // const serializedTransactionObject = await this.rpc.getTransaction(SolKit.signature(txid), { ...this._versionedConfig, encoding: 'base64' }).send();
-
-    const storedTxPath = '/Users/bpmj/dev/bitcore/.idea/storedTransaction';
-    // try {
-    //   const body =
-    //     serializedTransactionObject == null
-    //       ? 'transaction not found'
-    //       : JSON.stringify(
-    //         serializedTransactionObject,
-    //         (_, v) => (typeof v === 'bigint' ? v.toString() : v),
-    //         2
-    //       );
-    //   await writeFile(storedTxPath, body, 'utf8');
-    // } catch (err) {
-    //   console.error(`SolRpc.getTransaction: could not write debug snapshot to ${storedTxPath}:`, err);
-    // }
-
-    let serializedTransactionObject;
-    try {
-      const raw = (await readFile(storedTxPath, 'utf8')).trim();
-      if (!raw || raw === 'transaction not found') {
-        console.log(raw === 'transaction not found' ? raw : 'Unexpected result');
-        serializedTransactionObject = null;
-      } else {
-        serializedTransactionObject = JSON.parse(raw);
-      }
-    } catch (err) {
-      console.error(`SolRpc.getTransaction: could not read stored base64 getTransaction snapshot from ${storedTxPath}:`, err);
-      serializedTransactionObject = null;
-    }
+    const serializedTransactionObject = await this.rpc.getTransaction(SolKit.signature(txid), { ...this._versionedConfig, encoding: 'base64' }).send();
 
     if (!serializedTransactionObject?.transaction) {
       return null;
