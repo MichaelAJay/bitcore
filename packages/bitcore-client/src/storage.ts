@@ -217,8 +217,8 @@ export class Storage {
     }
   }
 
-  async getStoredKeys(params: { addresses: string[]; name: string; reverseLook?: boolean }): Promise<Array<any>> {
-    const { addresses, name, reverseLook } = params;
+  async getStoredKeys(params: { addresses: string[]; name: string }): Promise<Array<any>> {
+    const { addresses, name } = params;
     const keys = new Array<any>();
     let i = 0;
     for (const address of addresses) {
@@ -228,7 +228,6 @@ export class Storage {
           address,
           open: i === 0, // open on first
           keepAlive: i < addresses.length - 1, // close on last
-          reverseLook
         });
         keys.push(key);
       } catch (err) {
@@ -245,10 +244,9 @@ export class Storage {
     name: string;
     keepAlive: boolean;
     open: boolean;
-    reverseLook?: boolean;
   }): Promise<any> {
-    const { address, name, keepAlive, open, reverseLook } = params;
-    const payload = await this.storageType.getKey({ name, address, keepAlive, open, reverseLook });
+    const { address, name, keepAlive, open } = params;
+    const payload = await this.storageType.getKey({ name, address, keepAlive, open });
     const json = JSON.parse(payload) || payload;
     const { key } = json; // pubKey available - not needed
     if (key) {

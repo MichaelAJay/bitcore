@@ -139,7 +139,7 @@ export class Mongo {
     await this.close();
   }
 
-  async getKey(params: { address: string; name: string; keepAlive: boolean; open: boolean; reverseLook?: boolean }) {
+  async getKey(params: { address: string; name: string; keepAlive: boolean; open: boolean }) {
     if (params.open) {
       await this.init();
     }

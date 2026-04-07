@@ -21,6 +21,7 @@ import * as Bcrypt from 'bcrypt';
 import { Client } from './client';
 import { Encryption } from './encryption';
 import { Storage } from './storage';
+import { TextFile } from './storage/textFile';
 import { ParseApiStream } from './stream-util';
 import { StorageType } from './types/storage';
 import { BumpTxFeeType, IWallet, KeyImport } from './types/wallet';
@@ -379,7 +380,6 @@ export class Wallet {
     const storedKeys = await this.storage.getStoredKeys({
       addresses,
       name: this.name,
-      reverseLook: true,
     });
 
     // Back up keys (enc)
@@ -444,11 +444,13 @@ export class Wallet {
      * 3. Overwrite
     */
     // 3a. Overwrite keys
-    await this.storage.addKeysSafe({ name: this.name, keys: newKeys })
-      .catch(err => {
-        console.error('Migration failure: updated keys not successfully stored', err);
-        throw new Error('Migration failure: keys not successfully stored. Use backups to restore prior wallet and keys.');
-      });
+    const overwriteKeys = this.storage.storageType instanceof TextFile
+      ? this.storage.storageType.migrate({ version: preMigrationVersion, name: this.name, keys: newKeys })
+      : this.storage.addKeysSafe({ name: this.name, keys: newKeys });
+    await overwriteKeys.catch(err => {
+      console.error('Migration failure: updated keys not successfully stored', err);
+      throw new Error('Migration failure: keys not successfully stored. Use backups to restore prior wallet and keys.');
+    });
     
     // 3b. Overwrite wallet
     this.version = CURRENT_WALLET_VERSION;
@@ -830,7 +832,6 @@ export class Wallet {
         decryptedKeys = await this.storage.getStoredKeys({
           addresses,
           name: this.name,
-          reverseLook: true,
         });
       } else {
         addresses.push(keys[0]);

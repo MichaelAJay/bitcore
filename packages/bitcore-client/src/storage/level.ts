@@ -117,7 +117,7 @@ export class Level {
     return this.db.put(`wallet|${wallet.name}`, JSON.stringify(wallet));
   }
 
-  async getKey(params: { address: string; name: string; keepAlive: boolean; open: boolean; reverseLook?: boolean }) {
+  async getKey(params: { address: string; name: string; keepAlive: boolean; open: boolean }) {
     const { address, name } = params;
     return (await this.db.get(`key|${name}|${address}`)) as string;
   }
