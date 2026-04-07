@@ -379,6 +379,7 @@ export class Wallet {
     const storedKeys = await this.storage.getStoredKeys({
       addresses,
       name: this.name,
+      reverseLook: true,
     });
 
     // Back up keys (enc)
@@ -829,6 +830,7 @@ export class Wallet {
         decryptedKeys = await this.storage.getStoredKeys({
           addresses,
           name: this.name,
+          reverseLook: true,
         });
       } else {
         addresses.push(keys[0]);

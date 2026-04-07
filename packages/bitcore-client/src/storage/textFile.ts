@@ -175,18 +175,34 @@ export class TextFile {
     });
   }
 
-  async getKey(params: { address: string; name: string; keepAlive: boolean; open: boolean }) {
-    const { address, name } = params;
-    return new Promise(resolve => {
-      fs.createReadStream(this.addressFileName, { flags: 'r', encoding: 'utf8' })
+  async getKey(params: { address: string; name: string; keepAlive: boolean; open: boolean; reverseLook?: boolean }) {
+    const { address, name, reverseLook } = params;
+    return new Promise((resolve, reject) => {
+      let lastMatch = null;
+      const readStream = fs.createReadStream(this.addressFileName, { flags: 'r', encoding: 'utf8' });
+      readStream
         .pipe(StreamUtil.jsonlBufferToObjectMode())
         .on('data', data => {
-          if (data.name === name && data.address === address) {
-            resolve(data.toStore);
+          // Doesn't match query short-circuit
+          if (data.name !== name || data.address !== address) {
+            return;
           }
+          // Reverse look short-circuit (don't resolve)
+          if (reverseLook) {
+            lastMatch = data.toStore;
+            return;
+          }
+
+          // no short circuit: query match & no reverse look - take first
+          readStream.destroy();
+          resolve(data.toStore);
+        })
+        .on('error', err => {
+          reject(err);
         })
         .on('end', () => {
-          resolve(null);
+          // initialized to null
+          resolve(lastMatch);
         });
     });
   }
