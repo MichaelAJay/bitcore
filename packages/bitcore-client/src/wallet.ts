@@ -231,6 +231,14 @@ export class Wallet {
       storageType
     });
 
+    if (!xpriv) {
+      process.stdout.write(Buffer.from(mnemonic.phrase));
+      process.stdout.write(os.EOL);
+    } else {
+      process.stdout.write(hdPrivKey.toBuffer());
+      process.stdout.write(os.EOL);
+    }
+
     await loadedWallet.register().catch(e => {
       console.debug(e);
       console.error('Failed to register wallet with bitcore-node.');
