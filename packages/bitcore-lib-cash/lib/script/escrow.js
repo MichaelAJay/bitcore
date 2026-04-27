@@ -1,5 +1,4 @@
 const _ = require('lodash');
-
 const Hash = require('../crypto/hash');
 const Opcode = require('../opcode');
 const PublicKey = require('../publickey');

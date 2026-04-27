@@ -1,14 +1,13 @@
 'use strict';
 
-var _ = require('lodash');
-var $ = require('../util/preconditions');
-var inherits = require('inherits');
-var BufferUtil = require('../util/buffer');
-var JSUtil = require('../util/js');
-
-var PublicKey = require('../publickey');
-var errors = require('../errors');
-var Signature = require('../crypto/signature');
+const inherits = require('inherits');
+const _ = require('lodash');
+const Signature = require('../crypto/signature');
+const errors = require('../errors');
+const PublicKey = require('../publickey');
+const BufferUtil = require('../util/buffer');
+const JSUtil = require('../util/js');
+const $ = require('../util/preconditions');
 
 /**
  * @desc
@@ -38,8 +37,8 @@ TransactionSignature.prototype._fromObject = function(arg) {
   this.outputIndex = arg.outputIndex;
   this.inputIndex = arg.inputIndex;
   this.signature = (arg.signature instanceof Signature) ? arg.signature :
-                     BufferUtil.isBuffer(arg.signature) ? Signature.fromBuffer(arg.signature) :
-                     Signature.fromString(arg.signature);
+    BufferUtil.isBuffer(arg.signature) ? Signature.fromBuffer(arg.signature) :
+      Signature.fromString(arg.signature);
   this.sigtype = arg.sigtype;
   return this;
 };

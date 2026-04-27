@@ -1,44 +1,46 @@
+/* eslint-disable no-bitwise */
 'use strict';
 
-var should = require('chai').should();
-var bitcore = require('../..');
-var Interpreter = bitcore.Script.Interpreter;
-var Transaction = bitcore.Transaction;
-var Output = bitcore.Transaction.Output;
-var PrivateKey = bitcore.PrivateKey;
-var Script = bitcore.Script;
-var BN = bitcore.crypto.BN;
-var BufferReader = bitcore.encoding.BufferReader;
-var BufferWriter = bitcore.encoding.BufferWriter;
-var Opcode = bitcore.Opcode;
-var _ = require('lodash');
+const should = require('chai').should();
+const bitcore = require('../..');
 
-var script_tests = require('../data/bitcoind/script_tests');
-var tx_valid = require('../data/bitcoind/tx_valid');
-var tx_invalid = require('../data/bitcoind/tx_invalid');
-var vmb_tests = require('../data/libauth/vmb_tests');
+const Interpreter = bitcore.Script.Interpreter;
+const Transaction = bitcore.Transaction;
+const Output = bitcore.Transaction.Output;
+const PrivateKey = bitcore.PrivateKey;
+const Script = bitcore.Script;
+const BN = bitcore.crypto.BN;
+const BufferReader = bitcore.encoding.BufferReader;
+const BufferWriter = bitcore.encoding.BufferWriter;
+const Opcode = bitcore.Opcode;
+const _ = require('lodash');
 
-//the script string format used in bitcoind data tests
+const script_tests = require('../data/bitcoind/script_tests');
+const tx_valid = require('../data/bitcoind/tx_valid');
+const tx_invalid = require('../data/bitcoind/tx_invalid');
+const vmb_tests = require('../data/libauth/vmb_tests');
+
+// the script string format used in bitcoind data tests
 Script.fromBitcoindString = function(str) {
-  var bw = new BufferWriter();
-  var tokens = str.split(' ');
-  for (var i = 0; i < tokens.length; i++) {
-    var token = tokens[i];
+  const bw = new BufferWriter();
+  const tokens = str.split(' ');
+  for (let i = 0; i < tokens.length; i++) {
+    let token = tokens[i];
     if (token === '') {
       continue;
     }
     if (token === '-1') {
       token = '1NEGATE';
     }
-    var opstr;
-    var opcodenum;
-    var tbuf;
+    let opstr;
+    let opcodenum;
+    let tbuf;
     if (token[0] === '0' && token[1] === 'x') {
-      var hex = token.slice(2);
+      const hex = token.slice(2);
       bw.write(Buffer.from(hex, 'hex'));
     } else if (token[0] === '\'') {
-      var tstr = token.slice(1, token.length - 1);
-      var cbuf = Buffer.from(tstr);
+      const tstr = token.slice(1, token.length - 1);
+      const cbuf = Buffer.from(tstr);
       tbuf = Script().add(cbuf).toBuffer();
       bw.write(tbuf);
     } else if (typeof Opcode['OP_' + token] !== 'undefined') {
@@ -50,14 +52,14 @@ Script.fromBitcoindString = function(str) {
       opcodenum = Opcode[opstr];
       bw.writeUInt8(opcodenum);
     } else if (!isNaN(parseInt(token))) {
-      var script = Script().add(new BN(token).toScriptNumBuffer());
+      const script = Script().add(new BN(token).toScriptNumBuffer());
       tbuf = script.toBuffer();
       bw.write(tbuf);
     } else {
       throw new Error('Could not determine type of script value');
     }
   }
-  var buf = bw.concat();
+  const buf = bw.concat();
   return this.fromBuffer(buf);
 };
 
@@ -66,7 +68,7 @@ Script.fromBitcoindString = function(str) {
 describe('Interpreter', function() {
 
   it('should make a new interp', function() {
-    var interp = new Interpreter();
+    const interp = new Interpreter();
     (interp instanceof Interpreter).should.equal(true);
     interp.stack.length.should.equal(0);
     interp.altstack.length.should.equal(0);
@@ -84,7 +86,7 @@ describe('Interpreter', function() {
       Interpreter.castToBool(new BN(0).toSM({
         endian: 'little'
       })).should.equal(false);
-      Interpreter.castToBool(Buffer.from('0080', 'hex')).should.equal(false); //negative 0
+      Interpreter.castToBool(Buffer.from('0080', 'hex')).should.equal(false); // negative 0
       Interpreter.castToBool(new BN(1).toSM({
         endian: 'little'
       })).should.equal(true);
@@ -92,8 +94,8 @@ describe('Interpreter', function() {
         endian: 'little'
       })).should.equal(true);
 
-      var buf = Buffer.from('00', 'hex');
-      var bool = BN.fromSM(buf, {
+      const buf = Buffer.from('00', 'hex');
+      const bool = BN.fromSM(buf, {
         endian: 'little'
       }).cmp(BN.Zero) !== 0;
       Interpreter.castToBool(buf).should.equal(bool);
@@ -104,8 +106,8 @@ describe('Interpreter', function() {
   describe('#verify', function() {
 
     it('should verify these trivial scripts', function() {
-      var verified;
-      var si = Interpreter();
+      let verified;
+      const si = Interpreter();
       verified = si.verify(Script('OP_1'), Script('OP_1'));
       verified.should.equal(true);
       verified = Interpreter().verify(Script('OP_1'), Script('OP_0'));
@@ -128,38 +130,38 @@ describe('Interpreter', function() {
 
     it('should verify these simple transaction', function() {
       // first we create a transaction
-      var privateKey = new PrivateKey('cSBnVM4xvxarwGQuAfQFwqDg9k5tErHUHzgWsEfD4zdwUasvqRVY');
-      var publicKey = privateKey.publicKey;
-      var fromAddress = publicKey.toAddress();
-      var toAddress = 'mrU9pEmAx26HcbKVrABvgL7AwA5fjNFoDc';
-      var scriptPubkey = Script.buildPublicKeyHashOut(fromAddress);
-      var utxo = {
+      const privateKey = new PrivateKey('cSBnVM4xvxarwGQuAfQFwqDg9k5tErHUHzgWsEfD4zdwUasvqRVY');
+      const publicKey = privateKey.publicKey;
+      const fromAddress = publicKey.toAddress();
+      const toAddress = 'mrU9pEmAx26HcbKVrABvgL7AwA5fjNFoDc';
+      const scriptPubkey = Script.buildPublicKeyHashOut(fromAddress);
+      const utxo = {
         address: fromAddress,
         txId: 'a477af6b2667c29670467e4e0728b685ee07b240235771862318e29ddbe58458',
         outputIndex: 0,
         script: scriptPubkey,
         satoshis: 100000
       };
-      var tx = new Transaction()
+      const tx = new Transaction()
         .from(utxo)
         .to(toAddress, 100000)
         .sign(privateKey, 1);
 
       // we then extract the signature from the first input
-      var inputIndex = 0;
-      var signature = tx.getSignatures(privateKey, 1)[inputIndex].signature;
+      const inputIndex = 0;
+      const signature = tx.getSignatures(privateKey, 1)[inputIndex].signature;
 
-      var scriptSig = Script.buildPublicKeyHashIn(publicKey, signature);
-      var flags = Interpreter.SCRIPT_VERIFY_P2SH | Interpreter.SCRIPT_VERIFY_STRICTENC;
-      var verified = Interpreter().verify(scriptSig, scriptPubkey, tx, inputIndex, flags);
+      const scriptSig = Script.buildPublicKeyHashIn(publicKey, signature);
+      const flags = Interpreter.SCRIPT_VERIFY_P2SH | Interpreter.SCRIPT_VERIFY_STRICTENC;
+      const verified = Interpreter().verify(scriptSig, scriptPubkey, tx, inputIndex, flags);
 
       verified.should.equal(true);
     });
   });
 
 
-  var getFlags = function getFlags(flagstr) {
-    var flags = 0;
+  const getFlags = function getFlags(flagstr) {
+    let flags = 0;
     if (flagstr.indexOf('NONE') !== -1) {
       flags = flags | Interpreter.SCRIPT_VERIFY_NONE;
     }
@@ -201,7 +203,7 @@ describe('Interpreter', function() {
       flags = flags | Interpreter.SCRIPT_VERIFY_CLEANSTACK;
     }
 
-    if(flagstr.indexOf('DISALLOW_SEGWIT_RECOVERY') !== -1) {
+    if (flagstr.indexOf('DISALLOW_SEGWIT_RECOVERY') !== -1) {
       flags = flags | Interpreter.SCRIPT_DISALLOW_SEGWIT_RECOVERY;
     }
 
@@ -249,24 +251,24 @@ describe('Interpreter', function() {
   };
 
 
-  var testToFromString = function(script) {
-    var s = script.toString();
+  const testToFromString = function(script) {
+    const s = script.toString();
     Script.fromString(s).toString().should.equal(s);
   };
 
-  var testFixture = function(vector, expected, extraData) {
+  const testFixture = function(vector, expected, extraData) {
   
-    var scriptSig = Script.fromBitcoindString(vector[0]);
-    var scriptPubkey = Script.fromBitcoindString(vector[1]);
-    var flags = getFlags(vector[2]);
-    var inputAmount = 0;
+    const scriptSig = Script.fromBitcoindString(vector[0]);
+    const scriptPubkey = Script.fromBitcoindString(vector[1]);
+    const flags = getFlags(vector[2]);
+    let inputAmount = 0;
     if (extraData) {
       inputAmount = extraData[0] * 1e8;
     }
 
-    var hashbuf = Buffer.alloc(32);
+    const hashbuf = Buffer.alloc(32);
     hashbuf.fill(0);
-    var credtx = new Transaction();
+    const credtx = new Transaction();
     credtx.setVersion(1);
     credtx.uncheckedAddInput(new Transaction.Input({
       prevTxId: '0000000000000000000000000000000000000000000000000000000000000000',
@@ -278,9 +280,9 @@ describe('Interpreter', function() {
       script: scriptPubkey,
       satoshis: inputAmount,
     }));
-    var idbuf = credtx.id;
+    const idbuf = credtx.id;
 
-    var spendtx = new Transaction();
+    const spendtx = new Transaction();
     spendtx.setVersion(1);
     spendtx.uncheckedAddInput(new Transaction.Input({
       prevTxId: idbuf.toString('hex'),
@@ -293,8 +295,8 @@ describe('Interpreter', function() {
       satoshis: inputAmount,
     }));
 
-    var interp = new Interpreter();
-    var verified = interp.verify(scriptSig, scriptPubkey, spendtx, 0, flags, new BN(inputAmount));
+    const interp = new Interpreter();
+    const verified = interp.verify(scriptSig, scriptPubkey, spendtx, 0, flags, new BN(inputAmount));
     verified.should.equal(expected);
   };
   describe('bitcoind script evaluation fixtures', function() {
@@ -326,7 +328,7 @@ describe('Interpreter', function() {
   describe('libauth vmb evaluation fixtures', () => {
     const flags = getFlags('P2SH CLEANSTACK MINIMALDATA VERIFY_CHECKLOCKTIMEVERIFY NATIVE_INTROSPECTION 64_BIT_INTEGERS ENABLE_TOKENS ENABLE_P2SH_32');
     const getOutputsFromHex = outputsHex => {
-      const reader = new BufferReader(Buffer.from(outputsHex,'hex'));
+      const reader = new BufferReader(Buffer.from(outputsHex, 'hex'));
       const numOutputs = reader.readVarintNum();
       const outputs = new Array(numOutputs).fill(1).map(() => Output.fromBufferReader(reader));
       return outputs;
@@ -368,50 +370,50 @@ describe('Interpreter', function() {
     });
   });
   describe('bitcoind transaction evaluation fixtures', function() {
-    var test_txs = function(set, expected) {
-      var c = 0;
+    const test_txs = function(set, expected) {
+      let c = 0;
       set.forEach(function(vector) {
         if (vector.length === 1) {
           return;
         }
         c++;
-        var cc = c; //copy to local
+        const cc = c; // copy to local
         it('should pass tx_' + (expected ? '' : 'in') + 'valid vector ' + cc, function() {
-          var inputs = vector[0];
-          var txhex = vector[1];
+          const inputs = vector[0];
+          const txhex = vector[1];
 
-          var flags = getFlags(vector[2]);
-          var map = {};
+          const flags = getFlags(vector[2]);
+          const map = {};
           inputs.forEach(function(input) {
-            var txid = input[0];
-            var txoutnum = input[1];
-            var scriptPubKeyStr = input[2];
+            const txid = input[0];
+            let txoutnum = input[1];
+            const scriptPubKeyStr = input[2];
             if (txoutnum === -1) {
-              txoutnum = 0xffffffff; //bitcoind casts -1 to an unsigned int
+              txoutnum = 0xffffffff; // bitcoind casts -1 to an unsigned int
             }
             map[txid + ':' + txoutnum] = Script.fromBitcoindString(scriptPubKeyStr);
           });
 
-          var tx = new Transaction(txhex);
+          const tx = new Transaction(txhex);
           tx.setVersion(1);
-          var allInputsVerified = true;
+          let allInputsVerified = true;
           tx.inputs.forEach(function(txin, j) {
             if (txin.isNull()) {
               return;
             }
-            var scriptSig = txin.script;
-            var txidhex = txin.prevTxId.toString('hex');
-            var txoutnum = txin.outputIndex;
-            var scriptPubkey = map[txidhex + ':' + txoutnum];
+            const scriptSig = txin.script;
+            const txidhex = txin.prevTxId.toString('hex');
+            const txoutnum = txin.outputIndex;
+            const scriptPubkey = map[txidhex + ':' + txoutnum];
             should.exist(scriptPubkey);
             (scriptSig !== undefined).should.equal(true);
-            var interp = new Interpreter();
-            var verified = interp.verify(scriptSig, scriptPubkey, tx, j, flags);
+            const interp = new Interpreter();
+            const verified = interp.verify(scriptSig, scriptPubkey, tx, j, flags);
             if (!verified) {
               allInputsVerified = false;
             }
           });
-          var txVerified = tx.verify();
+          let txVerified = tx.verify();
           txVerified = (txVerified === true) ? true : false;
           allInputsVerified = allInputsVerified && txVerified;
 

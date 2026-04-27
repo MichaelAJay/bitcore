@@ -1,18 +1,15 @@
 'use strict';
 
-var _ = require('lodash');
-var inherits = require('inherits');
-var Transaction = require('../transaction');
-var Input = require('./input');
-var Output = require('../output');
-var $ = require('../../util/preconditions');
-
-var Script = require('../../script');
-var Signature = require('../../crypto/signature');
-var Sighash = require('../sighash');
-var PublicKey = require('../../publickey');
-var BufferUtil = require('../../util/buffer');
-var TransactionSignature = require('../signature');
+const inherits = require('inherits');
+const _ = require('lodash');
+const Signature = require('../../crypto/signature');
+const Script = require('../../script');
+const BufferUtil = require('../../util/buffer');
+const $ = require('../../util/preconditions');
+const Output = require('../output');
+const Sighash = require('../sighash');
+const TransactionSignature = require('../signature');
+const Input = require('./input');
 
 /**
  * @constructor
@@ -24,8 +21,8 @@ function MultiSigInput(input, pubkeys, threshold, signatures, opts) {
   threshold = threshold || input.threshold;
   signatures = signatures || input.signatures;
   if (opts.noSorting) {
-    this.publicKeys = pubkeys
-  } else  {
+    this.publicKeys = pubkeys;
+  } else {
     this.publicKeys = _.sortBy(pubkeys, function(publicKey) { return publicKey.toString('hex'); });
   }
   $.checkState(Script.buildMultisigOut(this.publicKeys, threshold).equals(this.output.script),
@@ -42,7 +39,7 @@ function MultiSigInput(input, pubkeys, threshold, signatures, opts) {
 inherits(MultiSigInput, Input);
 
 MultiSigInput.prototype.toObject = function() {
-  var obj = Input.prototype.toObject.apply(this, arguments);
+  const obj = Input.prototype.toObject.apply(this, arguments);
   obj.threshold = this.threshold;
   obj.publicKeys = this.publicKeys.map(function(publicKey) { return publicKey.toString(); });
   obj.signatures = this._serializeSignatures();
@@ -77,6 +74,7 @@ MultiSigInput.prototype._serializeSignatures = function() {
  */
 MultiSigInput.prototype.getSighash = function(transaction, publicKey, index, sigtype) {
   $.checkState(this.output instanceof Output, 'this.output is not an instance of Output');
+  // eslint-disable-next-line no-bitwise
   sigtype = sigtype || (Signature.SIGHASH_ALL | Signature.SIGHASH_FORKID);
 
   const sighash = Sighash.sighash(transaction, sigtype, index, this.output.script, this.output.satoshisBN, undefined);
@@ -86,6 +84,7 @@ MultiSigInput.prototype.getSighash = function(transaction, publicKey, index, sig
 
 MultiSigInput.prototype.getSignatures = function(transaction, privateKey, index, sigtype, hashData, signingMethod) {
   $.checkState(this.output instanceof Output, 'this.output is not an instance of Output');
+  // eslint-disable-next-line no-bitwise
   sigtype = sigtype || (Signature.SIGHASH_ALL | Signature.SIGHASH_FORKID);
 
   const results = [];
@@ -133,7 +132,7 @@ MultiSigInput.prototype._createSignatures = function(signingMethod) {
         BufferUtil.integerAsSingleByteBuffer(signature.sigtype)
       ]);
     }
-  );
+    );
 };
 
 MultiSigInput.prototype.clearSignatures = function() {
@@ -187,13 +186,13 @@ MultiSigInput.prototype.isValidSignature = function(transaction, signature, sign
  */
 MultiSigInput.normalizeSignatures = function(transaction, input, inputIndex, signatures, publicKeys, signingMethod) {
   return publicKeys.map(function (pubKey) {
-    var signatureMatch = null;
+    let signatureMatch = null;
     signatures = signatures.filter(function (signatureBuffer) {
       if (signatureMatch) {
         return true;
       }
 
-      var signature = new TransactionSignature({
+      const signature = new TransactionSignature({
         signature: Signature.fromTxFormat(signatureBuffer),
         publicKey: pubKey,
         prevTxId: input.prevTxId,
@@ -203,14 +202,14 @@ MultiSigInput.normalizeSignatures = function(transaction, input, inputIndex, sig
       });
 
       signature.signature.nhashtype = signature.sigtype;
-      var isMatch = Sighash.verify(
-          transaction,
-          signature.signature,
-          signature.publicKey,
-          signature.inputIndex,
-          input.output.script,
-          undefined,
-          signingMethod
+      const isMatch = Sighash.verify(
+        transaction,
+        signature.signature,
+        signature.publicKey,
+        signature.inputIndex,
+        input.output.script,
+        undefined,
+        signingMethod
       );
 
       if (isMatch) {

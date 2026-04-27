@@ -1,17 +1,18 @@
+/* eslint-disable no-bitwise */
 'use strict';
 
-var _ = require('lodash');
-var BN = require('../crypto/bn');
-var buffer = require('buffer');
-var bufferUtil = require('../util/buffer');
-var JSUtil = require('../util/js');
-var BufferWriter = require('../encoding/bufferwriter');
-var BufferReader = require('../encoding/bufferreader');
-var Script = require('../script');
-var $ = require('../util/preconditions');
-var errors = require('../errors');
+const buffer = require('buffer');
+const _ = require('lodash');
+const BN = require('../crypto/bn');
+const BufferReader = require('../encoding/bufferreader');
+const BufferWriter = require('../encoding/bufferwriter');
+const errors = require('../errors');
+const Script = require('../script');
+const bufferUtil = require('../util/buffer');
+const JSUtil = require('../util/js');
+const $ = require('../util/preconditions');
 
-var MAX_SAFE_INTEGER = 0x1fffffffffffff;
+const MAX_SAFE_INTEGER = 0x1fffffffffffff;
 
 function Output(args) {
   if (!(this instanceof Output)) {
@@ -22,7 +23,7 @@ function Output(args) {
     if (bufferUtil.isBuffer(args.script)) {
       this._scriptBuffer = args.script;
     } else {
-      var script;
+      let script;
       if (typeof args.script === 'string' && JSUtil.isHexa(args.script)) {
         script = Buffer.from(args.script, 'hex');
       } else {
@@ -93,17 +94,17 @@ Object.defineProperty(Output.prototype, 'tokenData', {
     return this._tokenData;
   },
   set: function(tokenData) {
-    if (typeof tokenData === "object") {
-      $.checkState(typeof tokenData.category !== "undefined", 'tokenData must have a category (a hex-encoded string or buffer)');
+    if (typeof tokenData === 'object') {
+      $.checkState(typeof tokenData.category !== 'undefined', 'tokenData must have a category (a hex-encoded string or buffer)');
       const categoryBuf = typeof tokenData.category === 'string' ? Buffer.from(tokenData.category, 'hex') : Buffer.from(tokenData.category);
       $.checkState(categoryBuf.length === 32, 'tokenData must have a 32-byte category');
       const category = categoryBuf.toString('hex');
-      $.checkState(typeof tokenData.amount !== "undefined", 'tokenData must have an amount (from 0 to 9223372036854775807)');
-      $.checkState(typeof tokenData.amount !== "number" || tokenData.amount <= Number.MAX_SAFE_INTEGER, 'to avoid precision loss, tokenData amount must provided as a string for values greater than 9007199254740991.');
+      $.checkState(typeof tokenData.amount !== 'undefined', 'tokenData must have an amount (from 0 to 9223372036854775807)');
+      $.checkState(typeof tokenData.amount !== 'number' || tokenData.amount <= Number.MAX_SAFE_INTEGER, 'to avoid precision loss, tokenData amount must provided as a string for values greater than 9007199254740991.');
       const amount = new BN(tokenData.amount);
       $.checkState(amount.gten(0), 'tokenData amount must be greater than or equal to 0');
       $.checkState(amount.lte(maximumAmount), 'tokenData amount must be less than or equal to 9223372036854775807.');
-      if(typeof tokenData.nft === "object"){
+      if (typeof tokenData.nft === 'object') {
         const nft = {};
         nft.capability = tokenData.nft.capability === undefined ? 'none' : String(tokenData.nft.capability);
         $.checkState(nftCapabilityNumberToLabel.includes(nft.capability), 'nft capability must be "none", "mutable", or "minting".');
@@ -151,11 +152,11 @@ Object.defineProperty(Output.prototype, 'satoshisBN', {
 
 
 Output.prototype.toObject = Output.prototype.toJSON = function toObject() {
-  var obj = {
+  const obj = {
     satoshis: this.satoshis
   };
   obj.script = this._scriptBuffer.toString('hex');
-  if(this._tokenData !== undefined) {
+  if (this._tokenData !== undefined) {
     obj.tokenData = this._tokenData;
     obj.tokenData.amount = obj.tokenData.amount.toString();
   }
@@ -171,7 +172,7 @@ Output.prototype.setScriptFromBuffer = function(buffer) {
   try {
     this._script = Script.fromBuffer(this._scriptBuffer);
     this._script._isOutput = true;
-  } catch(e) {
+  } catch (e) {
     if (e instanceof errors.Script.InvalidBuffer) {
       this._script = null;
     } else {
@@ -199,17 +200,17 @@ Output.prototype.setScript = function(script) {
 };
 
 Output.prototype.inspect = function() {
-  var scriptStr;
+  let scriptStr;
   if (this.script) {
     scriptStr = this.script.inspect();
   } else {
     scriptStr = this._scriptBuffer.toString('hex');
   }
   let tokenInfo = '';
-  if(typeof this._tokenData !== "undefined") {
-    const nftInfo = typeof this._tokenData.nft === "undefined" ?
-    '' : `; nft [capability: ${this._tokenData.nft.capability}; commitment: ${this._tokenData.nft.commitment}]`;
-    tokenInfo = `(token category: ${this._tokenData.category}; amount: ${this._tokenData.amount}${nftInfo} ) `
+  if (typeof this._tokenData !== 'undefined') {
+    const nftInfo = typeof this._tokenData.nft === 'undefined' ?
+      '' : `; nft [capability: ${this._tokenData.nft.capability}; commitment: ${this._tokenData.nft.commitment}]`;
+    tokenInfo = `(token category: ${this._tokenData.category}; amount: ${this._tokenData.amount}${nftInfo} ) `;
   }
   return '<Output (' + this.satoshis + ' sats) ' + tokenInfo + scriptStr + '>';
 };
@@ -224,12 +225,12 @@ const tokenFormatMask = 0xf0;
 const nftCapabilityMask = 0x0f;
 const maximumCapability = 2;
 Output.fromBufferReader = function(br) {
-  var obj = {};
+  const obj = {};
   obj.satoshis = br.readUInt64LEBN();
-  var size = br.readVarintNum();
+  const size = br.readVarintNum();
   if (size !== 0) {
-    var scriptSlot = br.read(size);
-    if(scriptSlot[0] === PREFIX_TOKEN) {
+    const scriptSlot = br.read(size);
+    if (scriptSlot[0] === PREFIX_TOKEN) {
       $.checkState(scriptSlot.length >= 34, 'Invalid token prefix: insufficient length.');
       const tokenDataAndBytecode = BufferReader(scriptSlot.slice(1));
       obj.tokenData = {};
@@ -243,10 +244,10 @@ Output.fromBufferReader = function(br) {
       const hasCommitmentLength = (prefixStructure & HAS_COMMITMENT_LENGTH) !== 0;
       if (hasCommitmentLength && !hasNft) $.checkState(false, 'Invalid token prefix: commitment requires an NFT.');
       const hasAmount = (prefixStructure & HAS_AMOUNT) !== 0;
-      if(hasNft) {
+      if (hasNft) {
         obj.tokenData.nft = {};
         obj.tokenData.nft.capability = nftCapabilityNumberToLabel[nftCapabilityInt];
-        if(hasCommitmentLength) {
+        if (hasCommitmentLength) {
           const length = tokenDataAndBytecode.readVarintNum();
           $.checkState(length > 0, 'Invalid token prefix: if encoded, commitment length must be greater than 0.');
           obj.tokenData.nft.commitment = tokenDataAndBytecode.read(length);
@@ -273,8 +274,8 @@ Output.prototype.toBufferWriter = function(writer) {
     writer = new BufferWriter();
   }
   writer.writeUInt64LEBN(this._satoshisBN);
-  var script = this._scriptBuffer;
-  if(typeof this._tokenData !== "undefined") {
+  const script = this._scriptBuffer;
+  if (typeof this._tokenData !== 'undefined') {
     const tokenPrefix = new BufferWriter();
     tokenPrefix.writeUInt8(PREFIX_TOKEN);
     tokenPrefix.write(Buffer.from(this._tokenData.category, 'hex').reverse());
@@ -288,12 +289,12 @@ Output.prototype.toBufferWriter = function(writer) {
     const tokenBitfield =
       hasNft | capabilityInt | hasCommitmentLength | hasAmount;
     tokenPrefix.writeUInt8(tokenBitfield);
-    if(hasCommitmentLength) {
+    if (hasCommitmentLength) {
       const commitment = Buffer.from(this._tokenData.nft.commitment, 'hex');
       tokenPrefix.writeVarintNum(commitment.length);
       tokenPrefix.write(commitment);
     }
-    if(hasAmount) {
+    if (hasAmount) {
       tokenPrefix.writeVarintBN(amount);
     }
     const tokenPrefixBuffer = tokenPrefix.toBuffer();
