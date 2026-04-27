@@ -265,12 +265,12 @@ describe('HDPrivate key interface', function() {
       'm/1/2//3'
     ];
 
-    invalid.forEach(function(datum) {
+    for (const datum of invalid) {      
       it('rejects illegal path ' + datum, function() {
         HDPrivateKey.isValidPath(datum).should.equal(false);
         expect(HDPrivateKey._getDerivationIndexes(datum)).to.equal(null);
       });
-    });
+    }
 
     it('generates deriving indexes correctly', function() {
       let indexes;

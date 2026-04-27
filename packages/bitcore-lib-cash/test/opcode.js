@@ -86,11 +86,11 @@ describe('Opcode', function() {
     });
 
     it('should work for every non-duplicate opcode', function() {
-      Object.keys(Opcode.map).forEach(function(key) {
+      for (const key of Object.keys(Opcode.map)) {
         if (key === 'OP_TRUE' || key === 'OP_FALSE') return;
         if (key === 'OP_NOP2' || key === 'OP_NOP3') return;
         Opcode.fromString(key).toString().should.equal(key);
-      });
+      }
     });
   });
 

@@ -333,7 +333,7 @@ describe('Interpreter', function() {
       const outputs = new Array(numOutputs).fill(1).map(() => Output.fromBufferReader(reader));
       return outputs;
     };
-    vmb_tests.forEach(test => {
+    for (const test of vmb_tests) {
       const testId = test[0];
       const txHex = test[4];
       const sourceOutputsHex = test[5];
@@ -351,7 +351,10 @@ describe('Interpreter', function() {
         }
         try {
           const outputs = getOutputsFromHex(sourceOutputsHex);
-          tx.inputs.forEach((input, index) => input.output = outputs[index]);
+          for (let i = 0; i < tx.inputs.length; i++) {
+            const input = tx.inputs[i];
+            input.output = outputs[i];
+          }
           tx.validateTokens();
         } catch (e) {
           false.should.equal(expectedValidity);
@@ -367,24 +370,24 @@ describe('Interpreter', function() {
           false.should.equal(expectedValidity);
         }
       });
-    });
+    }
   });
   describe('bitcoind transaction evaluation fixtures', function() {
     const test_txs = function(set, expected) {
-      let c = 0;
-      set.forEach(function(vector) {
+      for (let c = 0; c < set.length; c++) {
+        const vector = set[c];
         if (vector.length === 1) {
           return;
         }
-        c++;
+
         const cc = c; // copy to local
         it('should pass tx_' + (expected ? '' : 'in') + 'valid vector ' + cc, function() {
           const inputs = vector[0];
           const txhex = vector[1];
-
+  
           const flags = getFlags(vector[2]);
           const map = {};
-          inputs.forEach(function(input) {
+          for (const input of inputs) {
             const txid = input[0];
             let txoutnum = input[1];
             const scriptPubKeyStr = input[2];
@@ -392,8 +395,8 @@ describe('Interpreter', function() {
               txoutnum = 0xffffffff; // bitcoind casts -1 to an unsigned int
             }
             map[txid + ':' + txoutnum] = Script.fromBitcoindString(scriptPubKeyStr);
-          });
-
+          }
+  
           const tx = new Transaction(txhex);
           tx.setVersion(1);
           let allInputsVerified = true;
@@ -416,11 +419,11 @@ describe('Interpreter', function() {
           let txVerified = tx.verify();
           txVerified = (txVerified === true) ? true : false;
           allInputsVerified = allInputsVerified && txVerified;
-
+  
           allInputsVerified.should.equal(expected);
-
+  
         });
-      });
+      }
     };
     test_txs(tx_valid, true);
     test_txs(tx_invalid, false);

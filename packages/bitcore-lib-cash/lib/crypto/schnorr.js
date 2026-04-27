@@ -4,7 +4,6 @@
 // https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/2019-05-15-schnorr.md
 // https://github.com/bitcoincashorg/bitcoincash.org/blob/master/spec/2019-11-15-schnorrmultisig.md#wallet-implementation-guidelines
 
-const _ = require('lodash');
 const BufferUtil = require('../util/buffer');
 const $ = require('../util/preconditions');
 const BN = require('./bn');

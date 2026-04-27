@@ -328,14 +328,8 @@ Transaction.prototype.fromBufferReader = function(reader) {
 };
 
 Transaction.prototype.toObject = Transaction.prototype.toJSON = function toObject() {
-  const inputs = [];
-  this.inputs.forEach(function(input) {
-    inputs.push(input.toObject());
-  });
-  const outputs = [];
-  this.outputs.forEach(function(output) {
-    outputs.push(output.toObject());
-  });
+  const inputs = this.inputs.map(input => input.toObject());
+  const outputs = this.outputs.map(output => output.toObject());
   const obj = {
     hash: this.hash,
     version: this.version,
@@ -1105,9 +1099,10 @@ Transaction.prototype.removeOutput = function(index) {
  */
 Transaction.prototype.sort = function() {
   this.sortInputs(function(inputs) {
-    const copy = Array.prototype.concat.apply([], inputs);
-    let i = 0;
-    copy.forEach((x) => { x.i = i++;});
+    const copy = inputs.map((input, i) => {
+      input.i = i;
+      return input;
+    });
     copy.sort(function(first, second) {
       return compare(first.prevTxId, second.prevTxId)
         || first.outputIndex - second.outputIndex
@@ -1116,9 +1111,10 @@ Transaction.prototype.sort = function() {
     return copy;
   });
   this.sortOutputs(function(outputs) {
-    const copy = Array.prototype.concat.apply([], outputs);
-    let i = 0;
-    copy.forEach((x) => { x.i = i++;});
+    const copy = outputs.map((output, i) => {
+      output.i = i;
+      return output;
+    });
     copy.sort(function(first, second) {
       return first.satoshis - second.satoshis
         || compare(first.script.toBuffer(), second.script.toBuffer())
@@ -1303,7 +1299,7 @@ Transaction.prototype.validateTokens = function() {
   const tokenInputs = this.inputs.filter(input => input.output.tokenData);
   const tokenOutputs = this.outputs.filter(output => output.tokenData);
   const outputsGroupedByCategory = _.groupBy(tokenOutputs, (output) => output.tokenData.category);
-  Object.values(outputsGroupedByCategory).forEach(categoryOutputs => {
+  for (const categoryOutputs of Object.values(outputsGroupedByCategory)) {
     const category = categoryOutputs[0].tokenData.category;
     let unusedCategoryInputs = tokenInputs.filter(input => input.output.tokenData.category === category);
     const inputFungibleAmount = unusedCategoryInputs.reduce((sum, input) => {
@@ -1313,7 +1309,7 @@ Transaction.prototype.validateTokens = function() {
 
     let mintedAmount = new BN(0);
     let sentAmount = new BN(0);
-    categoryOutputs.forEach(output => {
+    for (const output of categoryOutputs) {
       const mintingUtxo = this.inputs.find(input => input.prevTxId.toString('hex') === output.tokenData.category);
       const tokenAmount = output.tokenData.amount;
       if (mintingUtxo) {
@@ -1341,14 +1337,15 @@ Transaction.prototype.validateTokens = function() {
         }
         sentAmount = sentAmount.add(tokenAmount);
       }
-    });
+    }
     if (mintedAmount.gt(new BN('9223372036854775807'))) {
       throw new Error('the transaction outputs include a sum of fungible tokens for a category exceeding the maximum supply (9223372036854775807)');
     }
     if (sentAmount.gt(inputFungibleAmount)) {
       throw new Error("the sum of fungible tokens in the transaction's outputs exceed that of the transactions inputs for a category");
     }
-  });
+  }
+
   return true;
 };
 

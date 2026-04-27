@@ -53,13 +53,11 @@ Block._from = function _from(arg) {
  * @private
  */
 Block._fromObject = function _fromObject(data) {
-  const transactions = [];
-  data.transactions.forEach(function(tx) {
+  const transactions = data.transactions.map(tx => {
     if (tx instanceof Transaction) {
-      transactions.push(tx);
-    } else {
-      transactions.push(Transaction().fromObject(tx));
+      return tx;
     }
+    return Transaction().fromObject(tx);
   });
   const info = {
     header: BlockHeader.fromObject(data.header),
@@ -139,10 +137,7 @@ Block.fromRawBlock = function fromRawBlock(data) {
  * @returns {Object} - A plain object with the block properties
  */
 Block.prototype.toObject = Block.prototype.toJSON = function toObject() {
-  const transactions = [];
-  this.transactions.forEach(function(tx) {
-    transactions.push(tx.toObject());
-  });
+  const transactions = this.transactions.map(tx => tx.toObject());
   return {
     header: this.header.toObject(),
     transactions: transactions

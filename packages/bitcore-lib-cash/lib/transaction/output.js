@@ -1,7 +1,6 @@
 /* eslint-disable no-bitwise */
 'use strict';
 
-const buffer = require('buffer');
 const _ = require('lodash');
 const BN = require('../crypto/bn');
 const BufferReader = require('../encoding/bufferreader');

@@ -757,7 +757,9 @@ Script.buildEscrowOut = function(inputPublicKeys, reclaimPublicKey) {
   $.checkArgument(reclaimPublicKey, 'Must provide a reclaim public key');
   const redeemScript = new Script();
   const redeemScriptOperations = Escrow.generateRedeemScriptOperations(inputPublicKeys, reclaimPublicKey);
-  redeemScriptOperations.forEach(operation => redeemScript.add(operation));
+  for (const operation of redeemScriptOperations) {
+    redeemScript.add(operation);
+  }
   return redeemScript;
 };
 

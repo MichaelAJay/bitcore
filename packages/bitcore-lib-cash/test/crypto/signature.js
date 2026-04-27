@@ -255,8 +255,8 @@ describe('Signature', function() {
 
     describe('bitcoind fixtures', function() {
       const test_sigs = function(set, expected) {
-        let i = 0;
-        set.forEach(function(vector) {
+        for (let i = 0; i < set.length; i++) {
+          const vector = set[i];          
           if (!JSUtil.isHexa(vector)) {
             // non-hex strings are ignored
             return;
@@ -269,8 +269,7 @@ describe('Signature', function() {
             const result = interp.checkTxSignatureEncoding(Buffer.from(sighex, 'hex'));
             result.should.equal(expected);
           });
-          i++;
-        });
+        }
       };
       test_sigs(sig_canonical, true);
       test_sigs(sig_noncanonical, false);
