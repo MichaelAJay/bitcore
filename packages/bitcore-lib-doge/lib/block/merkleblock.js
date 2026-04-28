@@ -104,7 +104,7 @@ MerkleBlock.prototype.toBufferWriter = function toBufferWriter(bw) {
     bw.write(Buffer.from(this.hashes[i], 'hex'));
   }
   bw.writeVarintNum(this.flags.length);
-  for (i = 0; i < this.flags.length; i++) {
+  for (let i = 0; i < this.flags.length; i++) {
     bw.writeUInt8(this.flags[i]);
   }
   return bw;
@@ -255,7 +255,7 @@ MerkleBlock._fromBufferReader = function _fromBufferReader(br) {
   }
   const numFlags = br.readVarintNum();
   info.flags = [];
-  for (i = 0; i < numFlags; i++) {
+  for (let i = 0; i < numFlags; i++) {
     info.flags.push(br.readUInt8());
   }
   return info;

@@ -290,7 +290,7 @@ describe('Transaction', function() {
   const fourth = thousandDOGE / 4;
   const half = thousandDOGE / 2;
 
-  let p2shPrivateKey1 = PrivateKey.fromWIF('cf2NrvygA68y6ZCAkW2ueCuQ1B8qzyWpjGY38qhjvQgZAFLhRWGB');
+  p2shPrivateKey1 = PrivateKey.fromWIF('cf2NrvygA68y6ZCAkW2ueCuQ1B8qzyWpjGY38qhjvQgZAFLhRWGB');
   const p2shPublicKey1 = p2shPrivateKey1.toPublicKey();
   const p2shPrivateKey2 = PrivateKey.fromWIF('ckoubjh1yr1Hyg8NPtGwDz4tx91b6qztxrJZgTtdR4Ed9CqAV5cn');
   const p2shPublicKey2 = p2shPrivateKey2.toPublicKey();
@@ -1266,7 +1266,7 @@ describe('Transaction', function() {
         it(inputSet.description, function() {
           const tx = new Transaction();
           inputSet.inputs = inputSet.inputs.map(function(input) {
-            const input = new Input({
+            input = new Input({
               prevTxId: input.txId,
               outputIndex: input.vout,
               script: new Script(),

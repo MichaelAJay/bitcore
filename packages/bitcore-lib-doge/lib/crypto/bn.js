@@ -78,9 +78,7 @@ BN.prototype.toBuffer = function(opts) {
     const natlen = hex.length / 2;
     buf = Buffer.from(hex, 'hex');
 
-    if (natlen === opts.size) {
-      buf = buf;
-    } else if (natlen > opts.size) {
+    if (natlen > opts.size) {
       buf = BN.trim(buf, natlen);
     } else if (natlen < opts.size) {
       buf = BN.pad(buf, natlen, opts.size);
@@ -196,7 +194,7 @@ BN.pad = function(buf, natlen, size) {
   for (let i = 0; i < buf.length; i++) {
     rbuf[rbuf.length - 1 - i] = buf[buf.length - 1 - i];
   }
-  for (i = 0; i < size - natlen; i++) {
+  for (let i = 0; i < size - natlen; i++) {
     rbuf[i] = 0;
   }
   return rbuf;

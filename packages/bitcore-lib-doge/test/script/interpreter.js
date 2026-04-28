@@ -222,7 +222,7 @@ describe('Interpreter', function() {
   };
 
   const testFixture = function(vector, expected, witness, amount) {
-    const amount = amount || 0;
+    amount = amount || 0;
     const scriptSig = Script.fromBitcoindString(vector[0]);
     const scriptPubkey = Script.fromBitcoindString(vector[1]);
     const flags = getFlags(vector[2]);
