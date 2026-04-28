@@ -1,3 +1,4 @@
+/* eslint-disable no-bitwise */
 'use strict';
 
 const _ = require('lodash');
@@ -962,16 +963,16 @@ Interpreter.prototype.step = function() {
         break;
 
       case Opcode.OP_RETURN:
-        {
-          this.errstr = 'SCRIPT_ERR_OP_RETURN';
-          return false;
-        }
-        break;
+      {
+        this.errstr = 'SCRIPT_ERR_OP_RETURN';
+        return false;
+      }
+    
 
 
-        //
-        // Stack ops
-        //
+      //
+      // Stack ops
+      //
       case Opcode.OP_TOALTSTACK:
         {
           if (this.stack.length < 1) {
@@ -1482,7 +1483,7 @@ Interpreter.prototype.step = function() {
             sig = Signature.fromTxFormat(bufSig);
             pubkey = PublicKey.fromBuffer(bufPubkey, false);
             fSuccess = this.tx.verifySignature(sig, pubkey, this.nin, subscript, this.sigversion, this.satoshis);
-          } catch (e) {
+          } catch {
             // invalid sig or pubkey
             fSuccess = false;
           }
@@ -1587,7 +1588,7 @@ Interpreter.prototype.step = function() {
               sig = Signature.fromTxFormat(bufSig);
               pubkey = PublicKey.fromBuffer(bufPubkey, false);
               fOk = this.tx.verifySignature(sig, pubkey, this.nin, subscript, this.sigversion, this.satoshis);
-            } catch (e) {
+            } catch {
               // invalid sig or pubkey
               fOk = false;
             }

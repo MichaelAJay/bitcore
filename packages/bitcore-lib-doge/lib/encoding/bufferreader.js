@@ -136,7 +136,6 @@ BufferReader.prototype.readVarintNum = function() {
       } else {
         throw new Error('number too large to retain precision - use readVarintBN');
       }
-      break;
     default:
       return first;
   }

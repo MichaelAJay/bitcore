@@ -53,19 +53,17 @@ function Unit(amount, code) {
   this._value = this._from(amount, code);
 
   const self = this;
-  const defineAccesor = function(key) {
+  for (const key of Object.keys(UNITS)) {
     Object.defineProperty(self, key, {
       get: function() { return self.to(key); },
       enumerable: true,
     });
-  };
-
-  Object.keys(UNITS).forEach(defineAccesor);
+  }
 }
 
-Object.keys(UNITS).forEach(function(key) {
+for (const key of Object.keys(UNITS)) {
   Unit[key] = key;
-});
+}
 
 /**
  * Returns a Unit instance created from JSON string or object

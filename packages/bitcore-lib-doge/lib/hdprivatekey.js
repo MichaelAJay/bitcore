@@ -263,7 +263,7 @@ HDPrivateKey.getSerializedError = function(data, network) {
   }
   try {
     data = Base58Check.decode(data);
-  } catch (e) {
+  } catch {
     return new errors.InvalidB58Checksum(data);
   }
   if (data.length !== HDPrivateKey.DataLength) {
@@ -421,8 +421,7 @@ HDPrivateKey.prototype._buildFromBuffers = function(arg) {
   }
 
   const network = Network.get(BufferUtil.integerFromBuffer(arg.version));
-  let xprivkey;
-  xprivkey = Base58Check.encode(buffer.Buffer.concat(sequence));
+  const xprivkey = Base58Check.encode(buffer.Buffer.concat(sequence));
   arg.xprivkey = Buffer.from(xprivkey);
 
   const privateKey = new PrivateKey(BN.fromBuffer(arg.privateKey), network);

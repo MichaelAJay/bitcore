@@ -264,10 +264,12 @@ describe('Interpreter', function() {
 
   describe('bitcoind script evaluation fixtures', function() {
     const testAllFixtures = function(set) {
+
+      
       let c = 0;
-      set.forEach(function(vector) {
+      for (const vector of set) {
         if (vector.length === 1) {
-          return;
+          continue;
         }
         c++;
 
@@ -279,7 +281,7 @@ describe('Interpreter', function() {
             return Buffer.from(x, 'hex');
           });
         } else {
-          return;
+          continue;
         }
 
         const fullScriptString = vector[0] + ' ' + vector[1];
@@ -292,7 +294,7 @@ describe('Interpreter', function() {
         function() {
           testFixture(vector, expected, witness, amount);
         });
-      });
+      }
     };
     testAllFixtures(script_tests);
 
@@ -302,9 +304,9 @@ describe('Interpreter', function() {
       let c = 0;
       let label = '';
       let runIdx = 1;  // Useful for debugging
-      set.forEach(function(vector, vIndex) {
+      for (const [vIndex, vector] of set.entries()) {
         if (vector.length === 1) {
-          return;
+          continue;
         }
         c++;
         const cc = c; // copy to local
@@ -320,7 +322,7 @@ describe('Interpreter', function() {
 
           const map = {};
           const mapprevOutValues = {};
-          inputs.forEach(function(input) {
+          for (const input of inputs) {
             const txid = input[0];
             let txoutnum = input[1];
             const scriptPubKeyStr = input[2];
@@ -331,13 +333,13 @@ describe('Interpreter', function() {
             if (input.length >= 4) {
               mapprevOutValues[txid + ':' + txoutnum] = input[3];
             }
-          });
+          }
 
           const tx = new Transaction(txhex);
           let allInputsVerified = true;
-          tx.inputs.forEach(function(txin, j) {
+          for (const [j, txin] of tx.inputs.entries()) {
             if (txin.isNull()) {
-              return;
+              continue;
             }
             const scriptSig = txin.script;
             const txidhex = txin.prevTxId.toString('hex');
@@ -353,14 +355,14 @@ describe('Interpreter', function() {
             if (!verified) {
               allInputsVerified = false;
             }
-          });
+          }
           let txVerified = tx.verify();
           txVerified = (txVerified === true) ? true : false;
           allInputsVerified = allInputsVerified && txVerified;
           allInputsVerified.should.equal(expected);
 
         });
-      });
+      }
     };
     test_txs(tx_valid, true);
     test_txs(tx_invalid, false);

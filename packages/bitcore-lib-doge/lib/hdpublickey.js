@@ -1,5 +1,6 @@
 'use strict';
 
+const assert = require('assert');
 const _ = require('lodash');
 const BN = require('./crypto/bn');
 const Hash = require('./crypto/hash');
@@ -10,14 +11,13 @@ const bitcoreErrors = require('./errors');
 const HDKeyCache = require('./hdkeycache');
 const HDPrivateKey = require('./hdprivatekey');
 const Network = require('./networks');
-const $ = require('./util/preconditions');
 const PublicKey = require('./publickey');
 
 const errors = bitcoreErrors;
 const hdErrors = bitcoreErrors.HDPublicKey;
-const assert = require('assert');
-const JSUtil = require('./util/js');
 const BufferUtil = require('./util/buffer');
+const JSUtil = require('./util/js');
+const $ = require('./util/preconditions');
 
 /**
  * The representation of an hierarchically derived public key.
@@ -170,7 +170,7 @@ HDPublicKey.prototype._deriveWithNumber = function(index, hardened) {
   let publicKey;
   try {
     publicKey = PublicKey.fromPoint(Point.getG().mul(leftPart).add(this.publicKey.point));
-  } catch (e) {
+  } catch {
     return this._deriveWithNumber(index + 1);
   }
 
@@ -235,7 +235,7 @@ HDPublicKey.getSerializedError = function(data, network) {
   }
   try {
     data = Base58Check.decode(data);
-  } catch (e) {
+  } catch {
     return new errors.InvalidB58Checksum(data);
   }
   if (data.length !== HDPublicKey.DataSize) {
@@ -350,8 +350,7 @@ HDPublicKey.prototype._buildFromBuffers = function(arg) {
   }
   const network = Network.get(BufferUtil.integerFromBuffer(arg.version));
 
-  let xpubkey;
-  xpubkey = Base58Check.encode(BufferUtil.concat(sequence));
+  const xpubkey = Base58Check.encode(BufferUtil.concat(sequence));
   arg.xpubkey = Buffer.from(xpubkey);
 
   const publicKey = new PublicKey(arg.publicKey, { network: network });

@@ -34,7 +34,7 @@ module.exports = {
     }
     try {
       parsed = JSON.parse(arg);
-    } catch (e) {
+    } catch {
       return false;
     }
     if (typeof(parsed) === 'object') {
@@ -60,13 +60,13 @@ module.exports = {
    * @return {Object} The target object
    */
   defineImmutable: function defineImmutable(target, values) {
-    Object.keys(values).forEach(function(key) {
+    for (const key of Object.keys(values)) {
       Object.defineProperty(target, key, {
         configurable: false,
         enumerable: true,
         value: values[key]
       });
-    });
+    }
     return target;
   },
   /**

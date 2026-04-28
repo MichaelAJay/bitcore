@@ -1,12 +1,14 @@
 'use strict';
 
 const _ = require('lodash');
-const $ = require('./util/preconditions');
 const Hash = require('./crypto/hash');
 const Base58Check = require('./encoding/base58check');
 const errors = require('./errors');
 const Networks = require('./networks');
 const PublicKey = require('./publickey');
+const Script = require('./script');
+const JSUtil = require('./util/js');
+const $ = require('./util/preconditions');
 
 /**
  * Instantiate an address from an address String or Buffer, a public key or script hash Buffer,
@@ -527,5 +529,4 @@ Address.prototype.inspect = function() {
 
 module.exports = Address;
 
-const Script = require('./script');
-const JSUtil = require('./util/js');
+

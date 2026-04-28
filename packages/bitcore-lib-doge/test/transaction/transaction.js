@@ -1630,9 +1630,6 @@ describe('Transaction', function() {
           check.should.equal(false);
         });
         it('will verify witness 2-of-2 multisig (part 3)', function() {
-          let flags;
-          let check;
-          let interpreter;
           const output1 = bitcore.Transaction('01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff00ffffffff0101000000000000002200207780f1145ef7ba4e703388c155d94bc399e24345e11c4559e683d5070feeb27400000000');
           const input1 = bitcore.Transaction('01000000000101791890e3effa9d4061a984812a90675418d0eb141655c106cce9b4bbbf9a3be00000000000ffffffff010100000000000000000400483045022100db977a31834033466eb103131b1ef9c57d6cea17f9a7eb3f3bafde1d7c1ddff502205ad84c9ca9c4139dce6e8e7850cc09a49ad57197b266814e79a78527ab4a9f950147304402205bd26da7dab9e379019ffd5e76fa77e161090bf577ed875e8e969f06cd66ba0a0220082cf7315ff7dc7aa8f6cebf7e70af1ffa45e63581c08e6fbc4e964035e6326b0147522102f86e3dc39cf9cd6c0eeb5fe25e3abe34273b8e79cc888dd5512001c7dac31b9921032e16a3c764fb6485345d91b39fb6da52c7026b8819e1e7d2f838a0df1445851a52ae00000000');
           const scriptPubkey = output1.outputs[0].script;
@@ -1640,9 +1637,9 @@ describe('Transaction', function() {
           const witnesses = input1.inputs[0].getWitnesses();
           const satoshis = 1;
 
-          interpreter = new Interpreter();
-          flags = Interpreter.SCRIPT_VERIFY_P2SH | Interpreter.SCRIPT_VERIFY_WITNESS;
-          check = interpreter.verify(scriptSig, scriptPubkey, input1, 0, flags, witnesses, satoshis);
+          const interpreter = new Interpreter();
+          const flags = Interpreter.SCRIPT_VERIFY_P2SH | Interpreter.SCRIPT_VERIFY_WITNESS;
+          const check = interpreter.verify(scriptSig, scriptPubkey, input1, 0, flags, witnesses, satoshis);
           check.should.equal(true);
         });
         it('will verify p2sh witness 2-of-2 multisig (part 1)', function() {
@@ -1688,9 +1685,6 @@ describe('Transaction', function() {
           check.should.equal(false);
         });
         it('will verify p2sh witness 2-of-2 multisig (part 3)', function() {
-          let flags;
-          let check;
-          let interpreter;
           const output1 = bitcore.Transaction('01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff00ffffffff01010000000000000017a9143f588990832299c654d8032bc6c5d181427a321e8700000000');
           const input1 = bitcore.Transaction('01000000000101ef6f782539d100d563d736339c4a57485b562f9705b28680b08b3efe9dd815870000000023220020a51db581b721c64132415f985ac3086bcf7817f1bbf45be984718b41f4189b39ffffffff01010000000000000000040047304402203202c4c3b40c091a051707421def9adb0d101076672ab220db36a3f87bbecad402205f976ff87af9149e83c87c94ec3b308c1abe4b8c5b3f43c842ebffc22885fc530147304402203c0a50f199774f6393e42ee29d3540cf868441b47efccb11139a357ecd45c5b702205e8442ff34f6f836cd9ad96c158504469db178d63a309d813ba68b86c7293f66014752210334f22ecf25636ba18f8c89e90d38f05036094fe0be48187fb9842374a237b1062102993d85ece51cec8c4d841fce02faa6130f57c811078c5f2a48c204caf12853b552ae00000000');
           const scriptPubkey = output1.outputs[0].script;
@@ -1698,9 +1692,9 @@ describe('Transaction', function() {
           const witnesses = input1.inputs[0].getWitnesses();
           const satoshis = 1;
 
-          interpreter = new Interpreter();
-          flags = Interpreter.SCRIPT_VERIFY_P2SH | Interpreter.SCRIPT_VERIFY_WITNESS;
-          check = interpreter.verify(scriptSig, scriptPubkey, input1, 0, flags, witnesses, satoshis);
+          const interpreter = new Interpreter();
+          const flags = Interpreter.SCRIPT_VERIFY_P2SH | Interpreter.SCRIPT_VERIFY_WITNESS;
+          const check = interpreter.verify(scriptSig, scriptPubkey, input1, 0, flags, witnesses, satoshis);
           check.should.equal(true);
         });
         it('will verify witness pay-to-uncompressed-pubkey (v1) part 1', function() {

@@ -2,8 +2,8 @@
 
 const buffer = require('buffer');
 const _ = require('lodash');
-const Base58 = require('./base58');
 const sha256sha256 = require('../crypto/hash').sha256sha256;
+const Base58 = require('./base58');
 
 const Base58Check = function Base58Check(obj) {
   if (!(this instanceof Base58Check))

@@ -93,7 +93,7 @@ URI.fromObject = function fromObject(json) {
 URI.isValid = function(arg, knownParams) {
   try {
     new URI(arg, knownParams);
-  } catch (err) {
+  } catch {
     return false;
   }
   return true;

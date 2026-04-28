@@ -9,12 +9,16 @@ const Signature = require('../crypto/signature');
 const BufferReader = require('../encoding/bufferreader');
 const BufferWriter = require('../encoding/bufferwriter');
 const errors = require('../errors');
+const PrivateKey = require('../privatekey');
+const Script = require('../script');
+const Interpreter = require('../script/interpreter');
 const BufferUtil = require('../util/buffer');
 const JSUtil = require('../util/js');
 const $ = require('../util/preconditions');
 const compare = Buffer.compare || require('buffer-compare');
 
 const Input = require('./input');
+const Output = require('./output');
 const Sighash = require('./sighash');
 const SighashWitness = require('./sighashwitness');
 const UnspentOutput = require('./unspentoutput');
@@ -23,10 +27,6 @@ const PublicKeyHashInput = Input.PublicKeyHash;
 const PublicKeyInput = Input.PublicKey;
 const MultiSigScriptHashInput = Input.MultiSigScriptHash;
 const MultiSigInput = Input.MultiSig;
-const Output = require('./output');
-const Script = require('../script');
-const PrivateKey = require('../privatekey');
-const Interpreter = require('../script/interpreter');
 
 /**
  * Represents a transaction, a set of inputs and outputs to change ownership of tokens
@@ -418,14 +418,8 @@ Transaction.prototype.fromBufferReader = function(reader) {
 
 
 Transaction.prototype.toObject = Transaction.prototype.toJSON = function toObject() {
-  const inputs = [];
-  this.inputs.forEach(function(input) {
-    inputs.push(input.toObject());
-  });
-  const outputs = [];
-  this.outputs.forEach(function(output) {
-    outputs.push(output.toObject());
-  });
+  const inputs = this.inputs.map(input => input.toObject());
+  const outputs = this.outputs.map(output => output.toObject());
   const obj = {
     hash: this.hash,
     version: this.version,
@@ -1128,9 +1122,11 @@ Transaction.prototype.removeOutput = function(index) {
  */
 Transaction.prototype.sort = function() {
   this.sortInputs(function(inputs) {
-    const copy = Array.prototype.concat.apply([], inputs);
-    let i = 0;
-    copy.forEach((x) => { x.i = i++;});
+    const copy = inputs.map((input, i) => {
+      input.i = i;
+      return input;
+    });
+
     copy.sort(function(first, second) {
       return compare(first.prevTxId, second.prevTxId)
         || first.outputIndex - second.outputIndex
@@ -1139,9 +1135,10 @@ Transaction.prototype.sort = function() {
     return copy;
   });
   this.sortOutputs(function(outputs) {
-    const copy = Array.prototype.concat.apply([], outputs);
-    let i = 0;
-    copy.forEach((x) => { x.i = i++;});
+    const copy = outputs.map((output, i) => {
+      output.i = i;
+      return output;
+    });
     copy.sort(function(first, second) {
       return first.satoshis - second.satoshis
         || compare(first.script.toBuffer(), second.script.toBuffer())
