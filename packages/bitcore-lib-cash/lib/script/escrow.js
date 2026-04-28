@@ -1,4 +1,3 @@
-const _ = require('lodash');
 const Hash = require('../crypto/hash');
 const Opcode = require('../opcode');
 const PublicKey = require('../publickey');
@@ -38,7 +37,10 @@ Escrow.getMerkleRoot = function getMerkleRoot(hashes) {
   if (hashes.length === 1) {
     return hashes[0];
   }
-  const parentHashes = _.chunk(hashes, 2).map(hashPair => Hash.sha256ripemd160(Buffer.concat(hashPair)));
+  const parentHashes = [];
+  for (let i = 0; i < hashes.length; i += 2) {
+    parentHashes.push(Hash.sha256ripemd160(Buffer.concat(hashes.slice(i, i + 2))));
+  }
   return getMerkleRoot(parentHashes);
 };
 

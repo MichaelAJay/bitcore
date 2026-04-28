@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const BufferUtil = require('../util/buffer');
 const JSUtil = require('../util/js');
 const $ = require('../util/preconditions');
@@ -143,7 +142,7 @@ Signature.parseSchnorrEncodedSig = function(buf) {
  */
 Signature.parseDER = function(buf, strict) {
   $.checkArgument(BufferUtil.isBuffer(buf), new Error('DER formatted signature should be a buffer'));
-  if (_.isUndefined(strict)) {
+  if (strict == null) {
     strict = true;
   }
 

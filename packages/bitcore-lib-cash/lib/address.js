@@ -1,7 +1,6 @@
 /* eslint-disable no-bitwise */
 'use strict';
 
-const _ = require('lodash');
 const Hash = require('./crypto/hash');
 const Base58Check = require('./encoding/base58check');
 const errors = require('./errors');
@@ -55,7 +54,7 @@ function Address(data, network, type) {
     return new Address(data, network, type);
   }
 
-  if (_.isArray(data) && _.isNumber(network)) {
+  if (Array.isArray(data) && typeof network === 'number') {
     return Address.createMultisig(data, network, type);
   }
 
@@ -112,7 +111,7 @@ Address.prototype._classifyArguments = function(data, network, type) {
     return Address._transformScript(data, network);
   } else if (typeof(data) === 'string') {
     return Address._transformString(data, network, type);
-  } else if (_.isObject(data)) {
+  } else if (typeof data === 'object' && data !== null) {
     return Address._transformObject(data);
   } else {
     throw new TypeError('First argument is an unrecognized data format.');

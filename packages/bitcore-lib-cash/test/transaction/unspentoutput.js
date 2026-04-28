@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const chai = require('chai');
 
 const expect = chai.expect;
@@ -41,7 +40,7 @@ describe('UnspentOutput', function() {
   });
 
   it('fails if vout is not a number', function() {
-    const sample = _.cloneDeep(sampleData2);
+    const sample = structuredClone(sampleData2);
     sample.vout = '1';
     expect(function() {
       return new UnspentOutput(sample);

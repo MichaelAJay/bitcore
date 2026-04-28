@@ -2,7 +2,6 @@
 
 const should = require('chai').should();
 const expect = require('chai').expect;
-const _ = require('lodash');
 const sinon = require('sinon');
 const bitcore = require('../..');
 const transactionVector = require('../data/tx_creation');
@@ -1080,8 +1079,10 @@ describe('Transaction', function() {
     });
 
     it('allows the user to randomize the output order', function() {
-      const shuffle = sinon.stub(_, 'shuffle');
-      shuffle.onFirstCall().returns([out2, out1, out4, out3]);
+      const random = sinon.stub(Math, 'random');
+      random.onCall(0).returns(0.6);
+      random.onCall(1).returns(0.9);
+      random.onCall(2).returns(0.1);
 
       transaction._changeIndex.should.equal(3);
       transaction.shuffleOutputs();
@@ -1091,7 +1092,7 @@ describe('Transaction', function() {
       transaction.outputs[3].should.equal(out3);
       transaction._changeIndex.should.equal(2);
 
-      _.shuffle.restore();
+      Math.random.restore();
     });
 
     it('fails if the provided function does not work as expected', function() {

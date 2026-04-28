@@ -2,7 +2,6 @@
 'use strict';
 
 const BN = require('bn.js');
-const _ = require('lodash');
 const BufferUtil = require('../util/buffer');
 const $ = require('../util/preconditions');
 
@@ -19,12 +18,12 @@ BN.One = new BN(1);
 BN.Minus1 = new BN(-1);
 
 BN.fromNumber = function(n) {
-  $.checkArgument(_.isNumber(n));
+  $.checkArgument(typeof n === 'number');
   return new BN(n);
 };
 
 BN.fromString = function(str, base) {
-  $.checkArgument(_.isString(str));
+  $.checkArgument(typeof str === 'string');
   return new BN(str, base);
 };
 

@@ -1,7 +1,6 @@
 'use strict';
 
 const URL = require('url');
-const _ = require('lodash');
 const Address = require('./address');
 const Networks = require('./networks');
 const Unit = require('./unit');
@@ -178,7 +177,7 @@ URI.prototype.toObject = URI.prototype.toJSON = function toObject() {
       json[m] = this[m].toString();
     }
   }
-  _.extend(json, this.extras);
+  Object.extend(json, this.extras);
   return json;
 };
 
@@ -201,7 +200,7 @@ URI.prototype.toString = function() {
   if (this.r) {
     query.r = this.r;
   }
-  _.extend(query, this.extras);
+  Object.assign(query, this.extras);
 
   return URL.format({
     protocol: Networks.get(this.network, 'name').prefix + ':',

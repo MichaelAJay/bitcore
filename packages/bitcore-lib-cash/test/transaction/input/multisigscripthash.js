@@ -3,7 +3,6 @@
 
 const should = require('chai').should();
 const expect = require('chai').expect;
-const _ = require('lodash');
 
 const bitcore = require('../../..');
 
@@ -55,18 +54,17 @@ describe('MultiSigScriptHashInput', function() {
       .to(address, 1000000);
     const input = transaction.inputs[0];
 
-    _.every(input.publicKeysWithoutSignature(), function(publicKeyMissing) {
-      const serialized = publicKeyMissing.toString();
-      return serialized === public1.toString() ||
-              serialized === public2.toString() ||
-              serialized === public3.toString();
-    }).should.equal(true);
+    const toSortedPublicKeyStrings = function(publicKeys) {
+      return publicKeys.map(function(publicKey) {
+        return publicKey.toString();
+      }).sort();
+    };
+    const allPublicKeys = toSortedPublicKeyStrings([public1, public2, public3]);
+    toSortedPublicKeyStrings(input.publicKeysWithoutSignature()).should.deep.equal(allPublicKeys);
+
     transaction.sign(privateKey1);
-    _.every(input.publicKeysWithoutSignature(), function(publicKeyMissing) {
-      const serialized = publicKeyMissing.toString();
-      return serialized === public2.toString() ||
-              serialized === public3.toString();
-    }).should.equal(true);
+    const remainingPublicKeys = toSortedPublicKeyStrings([public2, public3]);
+    toSortedPublicKeyStrings(input.publicKeysWithoutSignature()).should.deep.equal(remainingPublicKeys);
   });
   it('can clear all signatures', function() {
     const transaction = new Transaction()

@@ -1,7 +1,6 @@
 'use strict';
 
 const inherits = require('inherits');
-const _ = require('lodash');
 const Signature = require('../../crypto/signature');
 const Script = require('../../script');
 const BufferUtil = require('../../util/buffer');
@@ -23,7 +22,7 @@ function MultiSigInput(input, pubkeys, threshold, signatures, opts) {
   if (opts.noSorting) {
     this.publicKeys = pubkeys;
   } else {
-    this.publicKeys = _.sortBy(pubkeys, function(publicKey) { return publicKey.toString('hex'); });
+    this.publicKeys = [...pubkeys].sort((a, b) => a.toString('hex').localeCompare(b.toString('hex')));
   }
   $.checkState(Script.buildMultisigOut(this.publicKeys, threshold).equals(this.output.script),
     'Provided public keys don\'t match to the provided output script');

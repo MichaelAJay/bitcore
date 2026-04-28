@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const BufferWriter = require('../../encoding/bufferwriter');
 const errors = require('../../errors');
 const Script = require('../../script');
@@ -54,7 +53,7 @@ Object.defineProperty(Input.prototype, 'script', {
 });
 
 Input.fromObject = function(obj) {
-  $.checkArgument(_.isObject(obj));
+  $.checkArgument(typeof obj === 'object' && obj !== null);
   const input = new Input();
   return input._fromObject(obj);
 };

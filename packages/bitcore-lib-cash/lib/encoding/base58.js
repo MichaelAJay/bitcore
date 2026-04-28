@@ -2,7 +2,6 @@
 
 const buffer = require('buffer');
 const bs58 = require('bs58');
-const _ = require('lodash');
 
 const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'.split('');
 
@@ -26,7 +25,20 @@ Base58.validCharacters = function validCharacters(chars) {
   if (buffer.Buffer.isBuffer(chars)) {
     chars = chars.toString();
   }
-  return _.every(_.map(chars, function(char) { return _.includes(ALPHABET, char); }));
+  // Backwards compat: lodash _.map(null/undefined) yields [], _.every([]) is true.
+  if (chars == null) {
+    return true;
+  }
+  if (typeof chars !== 'string') {
+    // Backwards compat: lodash _.map on non-string primitives (number, boolean, etc.) yields [].
+    // Boxed strings must be unwrapped: lodash maps each character of String objects.
+    if (chars instanceof String) {
+      chars = chars.valueOf();
+    } else {
+      return true;
+    }
+  }
+  return Array.prototype.every.call(chars, char => ALPHABET.includes(char));
 };
 
 Base58.prototype.set = function(obj) {

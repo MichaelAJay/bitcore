@@ -13,7 +13,6 @@ const BN = bitcore.crypto.BN;
 const BufferReader = bitcore.encoding.BufferReader;
 const BufferWriter = bitcore.encoding.BufferWriter;
 const Opcode = bitcore.Opcode;
-const _ = require('lodash');
 
 const script_tests = require('../data/bitcoind/script_tests');
 const tx_valid = require('../data/bitcoind/tx_valid');

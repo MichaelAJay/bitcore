@@ -1,7 +1,6 @@
 /* eslint-disable no-bitwise */
 'use strict';
 
-const _ = require('lodash');
 const BN = require('../crypto/bn');
 const ECDSA = require('../crypto/ecdsa');
 const Hash = require('../crypto/hash');
@@ -55,13 +54,13 @@ Interpreter.prototype.verify = function(scriptSig, scriptPubkey, tx, nin, flags,
 
   this.nSigChecks = 0;
 
-  if (_.isUndefined(tx)) {
+  if (tx == null) {
     tx = new Transaction();
   }
-  if (_.isUndefined(nin)) {
+  if (nin == null) {
     nin = 0;
   }
-  if (_.isUndefined(flags)) {
+  if (flags == null) {
     flags = 0;
   }
 
@@ -860,7 +859,7 @@ Interpreter.prototype.step = function() {
   const chunk = this.script.chunks[this.pc];
   this.pc++;
   const opcodenum = chunk.opcodenum;
-  if (_.isUndefined(opcodenum)) {
+  if (opcodenum == null) {
     this.errstr = 'SCRIPT_ERR_UNDEFINED_OPCODE';
     return false;
   }
