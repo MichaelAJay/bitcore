@@ -1,13 +1,12 @@
 'use strict';
 
-var _ = require('lodash');
-var $ = require('./util/preconditions');
-var errors = require('./errors');
-var Base58Check = require('./encoding/base58check');
-var Networks = require('./networks');
-var Hash = require('./crypto/hash');
-var JSUtil = require('./util/js');
-var PublicKey = require('./publickey');
+const _ = require('lodash');
+const $ = require('./util/preconditions');
+const Hash = require('./crypto/hash');
+const Base58Check = require('./encoding/base58check');
+const errors = require('./errors');
+const Networks = require('./networks');
+const PublicKey = require('./publickey');
 
 /**
  * Instantiate an address from an address String or Buffer, a public key or script hash Buffer,
@@ -25,16 +24,16 @@ var PublicKey = require('./publickey');
  * @example
  * ```javascript
  * // validate that an input field is valid
- * var error = Address.getValidationError(input, 'testnet');
+ * let error = Address.getValidationError(input, 'testnet');
  * if (!error) {
- *   var address = Address(input, 'testnet');
+ *   let address = Address(input, 'testnet');
  * } else {
  *   // invalid network or checksum (typo?)
- *   var message = error.messsage;
+ *   let message = error.messsage;
  * }
  *
  * // get an address from a public key
- * var address = Address(publicKey, 'testnet').toString();
+ * let address = Address(publicKey, 'testnet').toString();
  * ```
  *
  * @param {*} data - The encoded data in various formats
@@ -73,7 +72,7 @@ function Address(data, network, type) {
     type = Address.TypesMap[type.toLowerCase()];
   }
 
-  var info = this._classifyArguments(data, network, type);
+  const info = this._classifyArguments(data, network, type);
 
   // set defaults if not set
   info.network = info.network || Networks.get(network) || Networks.defaultNetwork;
@@ -146,7 +145,7 @@ Address.AllTypes = Object.keys(Address.TypesMap);
  * @private
  */
 Address._transformHash = function(hash) {
-  var info = {};
+  const info = {};
   if (!(hash instanceof Buffer) && !(hash instanceof Uint8Array)) {
     throw new TypeError('Address supplied is not a buffer.');
   }
@@ -183,10 +182,10 @@ Address._transformObject = function(data) {
  * @private
  */
 Address._classifyFromVersion = function(buffer) {
-  var version = {};
+  const version = {};
 
-  var pubkeyhashNetwork = Networks.get(buffer[0], 'pubkeyhash');
-  var scripthashNetwork = Networks.get(buffer[0], 'scripthash');
+  const pubkeyhashNetwork = Networks.get(buffer[0], 'pubkeyhash');
+  const scripthashNetwork = Networks.get(buffer[0], 'scripthash');
 
   if (pubkeyhashNetwork) {
     version.network = pubkeyhashNetwork;
@@ -210,7 +209,7 @@ Address._classifyFromVersion = function(buffer) {
  */
 Address._transformBuffer = function(buffer, network, type) {
   /* jshint maxcomplexity: 9 */
-  var info = {};
+  const info = {};
   if (!(buffer instanceof Buffer) && !(buffer instanceof Uint8Array)) {
     throw new TypeError('Address supplied is not a buffer.');
   }
@@ -218,8 +217,8 @@ Address._transformBuffer = function(buffer, network, type) {
     throw new TypeError('Address buffers must be exactly 21 bytes.');
   }
 
-  var networkObj = Networks.get(network);
-  var bufferVersion = Address._classifyFromVersion(buffer);
+  const networkObj = Networks.get(network);
+  const bufferVersion = Address._classifyFromVersion(buffer);
 
   if (network && !networkObj) {
     throw new TypeError('Unknown network');
@@ -249,7 +248,7 @@ Address._transformBuffer = function(buffer, network, type) {
  * @private
  */
 Address._transformPublicKey = function(pubkey, network, type) {
-  var info = {};
+  const info = {};
   if (!(pubkey instanceof PublicKey)) {
     throw new TypeError('Address must be an instance of PublicKey.');
   }
@@ -270,7 +269,7 @@ Address._transformPublicKey = function(pubkey, network, type) {
  */
 Address._transformScript = function(script, network) {
   $.checkArgument(script instanceof Script, 'script must be a Script instance');
-  var info = script.getAddressInfo(network);
+  const info = script.getAddressInfo(network);
   if (!info) {
     throw new errors.Script.CantDeriveAddress(script);
   }
@@ -308,8 +307,8 @@ Address._transformString = function(data, network, type) {
     throw new TypeError('data parameter supplied is not a string.');
   }
   data = data.trim();
-  var addressBuffer = Base58Check.decode(data);
-  var info = Address._transformBuffer(addressBuffer, network, type);
+  const addressBuffer = Base58Check.decode(data);
+  const info = Address._transformBuffer(addressBuffer, network, type);
   return info;
 };
 
@@ -322,7 +321,7 @@ Address._transformString = function(data, network, type) {
  * @returns {Address} A new valid and frozen instance of an Address
  */
 Address.fromPublicKey = function(data, network, type) {
-  var info = Address._transformPublicKey(data, network, type);
+  const info = Address._transformPublicKey(data, network, type);
   network = network || Networks.defaultNetwork;
   return new Address(info.hashBuffer, network, info.type);
 };
@@ -335,7 +334,7 @@ Address.fromPublicKey = function(data, network, type) {
  * @returns {Address} A new valid and frozen instance of an Address
  */
 Address.fromPublicKeyHash = function(hash, network) {
-  var info = Address._transformHash(hash);
+  const info = Address._transformHash(hash);
   return new Address(info.hashBuffer, network, Address.PayToPublicKeyHash);
 };
 
@@ -348,7 +347,7 @@ Address.fromPublicKeyHash = function(hash, network) {
  */
 Address.fromScriptHash = function(hash, network) {
   $.checkArgument(hash, 'hash parameter is required');
-  var info = Address._transformHash(hash);
+  const info = Address._transformHash(hash);
   return new Address(info.hashBuffer, network, Address.PayToScriptHash);
 };
 
@@ -383,7 +382,7 @@ Address.payingTo = function(script, network) {
  */
 Address.fromScript = function(script, network) {
   $.checkArgument(script instanceof Script, 'script must be a Script instance');
-  var info = Address._transformScript(script, network);
+  const info = Address._transformScript(script, network);
   return new Address(info.hashBuffer, network, info.type);
 };
 
@@ -396,7 +395,7 @@ Address.fromScript = function(script, network) {
  * @returns {Address} A new valid and frozen instance of an Address
  */
 Address.fromBuffer = function(buffer, network, type) {
-  var info = Address._transformBuffer(buffer, network, type);
+  const info = Address._transformBuffer(buffer, network, type);
   return new Address(info.hashBuffer, info.network, info.type);
 };
 
@@ -409,7 +408,7 @@ Address.fromBuffer = function(buffer, network, type) {
  * @returns {Address} A new valid and frozen instance of an Address
  */
 Address.fromString = function(str, network, type) {
-  var info = Address._transformString(str, network, type);
+  const info = Address._transformString(str, network, type);
   return new Address(info.hashBuffer, info.network, info.type);
 };
 
@@ -424,7 +423,7 @@ Address.fromObject = function fromObject(obj) {
     JSUtil.isHexa(obj.hash),
     'Unexpected hash property, "' + obj.hash + '", expected to be hex.'
   );
-  var hashBuffer = Buffer.from(obj.hash, 'hex');
+  const hashBuffer = Buffer.from(obj.hash, 'hex');
   return new Address(hashBuffer, obj.network, obj.type);
 };
 
@@ -434,7 +433,7 @@ Address.fromObject = function fromObject(obj) {
  * @example
  * ```javascript
  * // a network mismatch error
- * var error = Address.getValidationError('15vkcKf7gB23wLAnZLmbVuMiiVDc1Nm4a2', 'testnet');
+ * let error = Address.getValidationError('15vkcKf7gB23wLAnZLmbVuMiiVDc1Nm4a2', 'testnet');
  * ```
  *
  * @param {string} data - The encoded data
@@ -443,7 +442,7 @@ Address.fromObject = function fromObject(obj) {
  * @returns {null|Error} The corresponding error message
  */
 Address.getValidationError = function(data, network, type) {
-  var error;
+  let error;
   try {
     /* jshint nonew: false */
     new Address(data, network, type);
@@ -492,8 +491,8 @@ Address.prototype.isPayToScriptHash = function() {
  * @returns {Buffer} Bitcoin address buffer
  */
 Address.prototype.toBuffer = function() {
-  var version = Buffer.from([this.network[this.type]]);
-  var buf = Buffer.concat([version, this.hashBuffer]);
+  const version = Buffer.from([this.network[this.type]]);
+  const buf = Buffer.concat([version, this.hashBuffer]);
   return buf;
 };
 
@@ -528,4 +527,5 @@ Address.prototype.inspect = function() {
 
 module.exports = Address;
 
-var Script = require('./script');
+const Script = require('./script');
+const JSUtil = require('./util/js');

@@ -1,16 +1,16 @@
 'use strict';
 
-var _ = require('lodash');
-var BN = require('../crypto/bn');
-var buffer = require('buffer');
-var bufferUtil = require('../util/buffer');
-var JSUtil = require('../util/js');
-var BufferWriter = require('../encoding/bufferwriter');
-var Script = require('../script');
-var $ = require('../util/preconditions');
-var errors = require('../errors');
+const buffer = require('buffer');
+const _ = require('lodash');
+const BN = require('../crypto/bn');
+const BufferWriter = require('../encoding/bufferwriter');
+const errors = require('../errors');
+const Script = require('../script');
+const bufferUtil = require('../util/buffer');
+const JSUtil = require('../util/js');
+const $ = require('../util/preconditions');
 
-var MAX_SAFE_INTEGER = 0x1fffffffffffff;
+const MAX_SAFE_INTEGER = 0x1fffffffffffff;
 
 function Output(args) {
   if (!(this instanceof Output)) {
@@ -21,7 +21,7 @@ function Output(args) {
     if (bufferUtil.isBuffer(args.script)) {
       this._scriptBuffer = args.script;
     } else {
-      var script;
+      let script;
       if (typeof args.script === 'string' && JSUtil.isHexa(args.script)) {
         script = Buffer.from(args.script, 'hex');
       } else {
@@ -90,7 +90,7 @@ Output.prototype.invalidSatoshis = function() {
 };
 
 Output.prototype.toObject = Output.prototype.toJSON = function toObject() {
-  var obj = {
+  const obj = {
     satoshis: this.satoshis
   };
   obj.script = this._scriptBuffer.toString('hex');
@@ -106,7 +106,7 @@ Output.prototype.setScriptFromBuffer = function(buffer) {
   try {
     this._script = Script.fromBuffer(this._scriptBuffer);
     this._script._isOutput = true;
-  } catch(e) {
+  } catch (e) {
     if (e instanceof errors.Script.InvalidBuffer) {
       this._script = null;
     } else {
@@ -133,7 +133,7 @@ Output.prototype.setScript = function(script) {
 };
 
 Output.prototype.inspect = function() {
-  var scriptStr;
+  let scriptStr;
   if (this.script) {
     scriptStr = this.script.inspect();
   } else {
@@ -143,9 +143,9 @@ Output.prototype.inspect = function() {
 };
 
 Output.fromBufferReader = function(br) {
-  var obj = {};
+  const obj = {};
   obj.satoshis = br.readUInt64LEBN();
-  var size = br.readVarintNum();
+  const size = br.readVarintNum();
   if (size !== 0) {
     obj.script = br.read(size);
   } else {
@@ -159,7 +159,7 @@ Output.prototype.toBufferWriter = function(writer) {
     writer = new BufferWriter();
   }
   writer.writeUInt64LEBN(this._satoshisBN);
-  var script = this._scriptBuffer;
+  const script = this._scriptBuffer;
   writer.writeVarintNum(script.length);
   writer.write(script);
   return writer;

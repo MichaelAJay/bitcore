@@ -1,12 +1,13 @@
 'use strict';
 
-var dogecore = module.exports;
+const dogecore = module.exports;
 
 // module information
 dogecore.version = 'v' + require('./package.json').version;
+
 dogecore.versionGuard = function(version) {
   if (version !== undefined) {
-    var message = 'More than one instance of dogecore found. ' +
+    const message = 'More than one instance of dogecore found. ' +
       'Please make sure to require dogecore and check that submodules do' +
       ' not also include their own dogecore dependency.';
     throw new Error(message);
@@ -61,6 +62,7 @@ dogecore.Unit = require('./lib/unit');
 dogecore.deps = {};
 dogecore.deps.bnjs = require('bn.js');
 dogecore.deps.bs58 = require('bs58');
+
 dogecore.deps.Buffer = Buffer;
 dogecore.deps.elliptic = require('elliptic');
 dogecore.deps.scryptsy = require('scryptsy');
