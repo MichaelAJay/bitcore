@@ -400,7 +400,8 @@ describe('Interpreter', function() {
           const tx = new Transaction(txhex);
           tx.setVersion(1);
           let allInputsVerified = true;
-          tx.inputs.forEach(function(txin, j) {
+          for (let j = 0; j < tx.inputs.length; j++) {
+            const txin = tx.inputs[j];
             if (txin.isNull()) {
               return;
             }
@@ -415,7 +416,7 @@ describe('Interpreter', function() {
             if (!verified) {
               allInputsVerified = false;
             }
-          });
+          }
           let txVerified = tx.verify();
           txVerified = (txVerified === true) ? true : false;
           allInputsVerified = allInputsVerified && txVerified;
