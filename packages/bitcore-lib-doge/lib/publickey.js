@@ -69,7 +69,7 @@ function PublicKey(data, extra) {
 PublicKey.prototype._classifyArgs = function(data, extra) {
   /* jshint maxcomplexity: 10 */
   let info = {
-    compressed: _.isUndefined(extra.compressed) || extra.compressed
+    compressed: extra.compressed == null || extra.compressed
   };
 
   // detect type of data
@@ -87,7 +87,7 @@ PublicKey.prototype._classifyArgs = function(data, extra) {
     throw new TypeError('First argument is an unrecognized data format.');
   }
   if (!info.network) {
-    info.network = _.isUndefined(extra.network) ? undefined : Network.get(extra.network);
+    info.network = (extra.network == null) ? undefined : Network.get(extra.network);
   }
   return info;
 };
@@ -145,7 +145,7 @@ PublicKey._transformDER = function(buf, strict) {
   $.checkArgument(PublicKey._isBuffer(buf), 'Must be a hex buffer of DER encoded public key');
   let info = {};
 
-  strict = _.isUndefined(strict) ? true : strict;
+  strict = strict == null ? true : strict;
 
   let x;
   let y;

@@ -39,7 +39,7 @@ Block._from = function _from(arg) {
   let info = {};
   if (BufferUtil.isBuffer(arg)) {
     info = Block._fromBufferReader(BufferReader(arg));
-  } else if (_.isObject(arg)) {
+  } else if (typeof arg === 'object' && arg !== null) {
     info = Block._fromObject(arg);
   } else {
     throw new TypeError('Unrecognized argument for Block');

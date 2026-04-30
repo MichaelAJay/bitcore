@@ -16,7 +16,7 @@ module.exports = {
   },
   checkArgumentType: function(argument, type, argumentName) {
     argumentName = argumentName || '(unknown name)';
-    if (_.isString(type)) {
+    if (typeof type === 'string') {
       if (type === 'Buffer') {
         const BufferUtil = require('./buffer');
         if (!BufferUtil.isBuffer(argument)) {

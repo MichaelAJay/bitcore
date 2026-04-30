@@ -141,8 +141,8 @@ function sign(transaction, privateKey, sighashType, inputIndex, scriptCode, sato
  * @return {boolean}
  */
 function verify(transaction, signature, publicKey, inputIndex, scriptCode, satoshisBuffer, signingMethod) {
-  $.checkArgument(!_.isUndefined(transaction));
-  $.checkArgument(!_.isUndefined(signature) && !_.isUndefined(signature.nhashtype));
+  $.checkArgument(transaction != null);
+  $.checkArgument(signature != null && signature.nhashtype != null);
   signingMethod = signingMethod || 'ecdsa';
 
   if (signingMethod === 'ecdsa') {

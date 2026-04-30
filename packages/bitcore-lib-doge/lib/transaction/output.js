@@ -16,7 +16,7 @@ function Output(args) {
   if (!(this instanceof Output)) {
     return new Output(args);
   }
-  if (_.isObject(args)) {
+  if (typeof args === 'object' && args !== null) {
     this.satoshis = args.satoshis;
     if (bufferUtil.isBuffer(args.script)) {
       this._scriptBuffer = args.script;

@@ -38,13 +38,13 @@ const Script = function Script(from) {
     return Script.fromBuffer(from.toBuffer());
   } else if (typeof from === 'string') {
     return Script.fromString(from);
-  } else if (_.isObject(from) && Array.isArray(from.chunks)) {
+  } else if (typeof from === 'object' && from !== null && Array.isArray(from.chunks)) {
     this.set(from);
   }
 };
 
 Script.prototype.set = function(obj) {
-  $.checkArgument(_.isObject(obj));
+  $.checkArgument(typeof obj === 'object' && obj !== null);
   $.checkArgument(Array.isArray(obj.chunks));
   this.chunks = obj.chunks;
   return this;

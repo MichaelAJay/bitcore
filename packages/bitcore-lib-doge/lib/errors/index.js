@@ -10,9 +10,9 @@ function format(message, args) {
 }
 const traverseNode = function(parent, errorDefinition) {
   const NodeError = function() {
-    if (_.isString(errorDefinition.message)) {
+    if (typeof errorDefinition.message === 'string') {
       this.message = format(errorDefinition.message, arguments);
-    } else if (_.isFunction(errorDefinition.message)) {
+    } else if (typeof errorDefinition.message === 'function') {
       this.message = errorDefinition.message.apply(null, arguments);
     } else {
       throw new Error('Invalid error definition for ' + errorDefinition.name);

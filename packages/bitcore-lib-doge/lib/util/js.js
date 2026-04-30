@@ -10,7 +10,7 @@ const _ = require('lodash');
  * @return {boolean} true if the string is the hexa representation of a number
  */
 const isHexa = function isHexa(value) {
-  if (!_.isString(value)) {
+  if (typeof value !== 'string') {
     return false;
   }
   return /^[0-9a-fA-F]+$/.test(value);
@@ -29,7 +29,7 @@ module.exports = {
    */
   isValidJSON: function isValidJSON(arg) {
     let parsed;
-    if (!_.isString(arg)) {
+    if (typeof arg !== 'string') {
       return false;
     }
     try {

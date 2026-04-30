@@ -42,7 +42,7 @@ function Unit(amount, code) {
   }
 
   // convert fiat to BTC
-  if (_.isNumber(code)) {
+  if (typeof code === 'number') {
     if (code <= 0) {
       throw new errors.Unit.InvalidRate(code);
     }
@@ -72,7 +72,7 @@ for (const key of Object.keys(UNITS)) {
  * @returns {Unit} A Unit instance
  */
 Unit.fromObject = function fromObject(data) {
-  $.checkArgument(_.isObject(data), 'Argument is expected to be an object');
+  $.checkArgument(typeof data === 'object' && data !== null, 'Argument is expected to be an object');
   return new Unit(data.amount, data.code);
 };
 
@@ -141,7 +141,7 @@ Unit.prototype._from = function(amount, code) {
  * @returns {Number} The converted value
  */
 Unit.prototype.to = function(code) {
-  if (_.isNumber(code)) {
+  if (typeof code === 'number') {
     if (code <= 0) {
       throw new errors.Unit.InvalidRate(code);
     }
