@@ -2,7 +2,6 @@
 
 const buffer = require('buffer');
 const bs58 = require('bs58');
-const _ = require('lodash');
 
 const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'.split('');
 

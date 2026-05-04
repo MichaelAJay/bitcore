@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const BN = require('./crypto/bn');
 const Hash = require('./crypto/hash');
 const Point = require('./crypto/point');

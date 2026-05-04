@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const BN = require('../crypto/bn');
 const Hash = require('../crypto/hash');
 const BufferReader = require('../encoding/bufferreader');
@@ -271,7 +270,7 @@ const idProperty = {
     }
     return this._id;
   },
-  set: _.noop
+  set: function () {/** no op */}
 };
 Object.defineProperty(BlockHeader.prototype, 'id', idProperty);
 Object.defineProperty(BlockHeader.prototype, 'hash', idProperty);

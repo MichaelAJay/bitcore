@@ -1,7 +1,6 @@
 'use strict';
 
 const buffer = require('buffer');
-const _ = require('lodash');
 const BN = require('../crypto/bn');
 const BufferWriter = require('../encoding/bufferwriter');
 const errors = require('../errors');

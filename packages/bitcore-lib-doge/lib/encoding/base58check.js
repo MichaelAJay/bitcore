@@ -1,7 +1,6 @@
 'use strict';
 
 const buffer = require('buffer');
-const _ = require('lodash');
 const sha256sha256 = require('../crypto/hash').sha256sha256;
 const Base58 = require('./base58');
 

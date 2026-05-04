@@ -1,7 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
-
 function format(message, args) {
   return message
     .replace('{0}', args[0])
@@ -30,9 +28,9 @@ const traverseNode = function(parent, errorDefinition) {
 
 /* jshint latedef: false */
 const childDefinitions = function(parent, childDefinitions) {
-  _.each(childDefinitions, function(childDefinition) {
+  for (const childDefinition of childDefinitions) {
     traverseNode(parent, childDefinition);
-  });
+  }
 };
 /* jshint latedef: true */
 

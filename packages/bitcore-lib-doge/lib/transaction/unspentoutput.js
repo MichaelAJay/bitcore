@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const Address = require('../address');
 const Script = require('../script');
 const Unit = require('../unit');

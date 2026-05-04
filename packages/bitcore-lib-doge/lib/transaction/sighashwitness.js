@@ -2,7 +2,6 @@
 
 /* jshint maxparams:5 */
 
-const _ = require('lodash');
 const BN = require('../crypto/bn');
 const ECDSA = require('../crypto/ecdsa');
 const Hash = require('../crypto/hash');

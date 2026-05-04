@@ -1,7 +1,6 @@
 'use strict';
 
 const inherits = require('inherits');
-const _ = require('lodash');
 const Address = require('../../address');
 const Signature = require('../../crypto/signature');
 const BufferWriter = require('../../encoding/bufferwriter');
@@ -26,7 +25,10 @@ function MultiSigScriptHashInput(input, pubkeys, threshold, signatures, opts) {
   if (opts.noSorting) {
     this.publicKeys = pubkeys;
   } else {
-    this.publicKeys = _.sortBy(pubkeys, function(publicKey) { return publicKey.toString('hex'); });
+    this.publicKeys = pubkeys
+      .map(pk => ({ pk, hex: pk.toString('hex') }))
+      .sort((a, b) => a.hex.localeCompare(b.hex))
+      .map(({ pk }) => pk);
   }
   this.redeemScript = Script.buildMultisigOut(this.publicKeys, threshold, opts);
   const nested = Script.buildWitnessMultisigOutFromScript(this.redeemScript);

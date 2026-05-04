@@ -1,7 +1,5 @@
 'use strict';
 
-const buffer = require('buffer');
-const _ = require('lodash');
 const Address = require('../address');
 const Hash = require('../crypto/hash');
 const Signature = require('../crypto/signature');
@@ -760,9 +758,10 @@ Script.buildMultisigOut = function(publicKeys, threshold, opts) {
   publicKeys = publicKeys.map(PublicKey);
   let sorted = publicKeys;
   if (!opts.noSorting) {
-    sorted = _.sortBy(publicKeys, function(publicKey) {
-      return publicKey.toString('hex');
-    });
+    sorted = publicKeys
+      .map(pk => ({ pk, hex: pk.toString('hex') }))
+      .sort((a, b) => a.hex.localeCompare(b.hex))
+      .map(({ pk }) => pk);
   }
   for (let i = 0; i < sorted.length; i++) {
     const publicKey = sorted[i];
