@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const expect = require('chai').expect;
 const bitcore = require('..');
 
@@ -47,7 +46,7 @@ describe('HDKey cache', function() {
     const child1 = master.deriveChild(0);
     const child2 = child1.deriveChild(0);
     const child3 = child2.deriveChild(0);
-    const child4 = child3.deriveChild(0);
-    expect(_.size(cache._cache)).to.equal(3);
+    child3.deriveChild(0);
+    expect(Object.keys(cache._cache).length).to.equal(3);
   });
 });

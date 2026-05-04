@@ -1,6 +1,5 @@
 'use strict';
 /* jshint unused: false */
-const _ = require('lodash');
 const assert = require('assert');
 const should = require('chai').should();
 const expect = require('chai').expect;
@@ -75,10 +74,10 @@ describe('HDPrivate key interface', function() {
   });
 
   it('builds a json keeping the structure and same members', function() {
-    assert(_.isEqual(
+    assert.deepStrictEqual(
       new HDPrivateKey(json).toJSON(),
       new HDPrivateKey(xprivkey).toJSON()
-    ));
+    );
   });
 
   it('should make a new private key from random for testnet', function() {
@@ -255,13 +254,13 @@ describe('HDPrivate key interface', function() {
       'm/12asd',
       'm/1/2//3'
     ];
-
-    invalid.forEach(function(datum) {
+    
+    for (const datum of invalid) {
       it('rejects illegal path ' + datum, function() {
         HDPrivateKey.isValidPath(datum).should.equal(false);
         expect(HDPrivateKey._getDerivationIndexes(datum)).to.equal(null);
       });
-    });
+    }
 
     it('generates deriving indexes correctly', function() {
       let indexes;
@@ -305,9 +304,9 @@ describe('HDPrivate key interface', function() {
     it('toObject leaves no Buffer instances', function() {
       const privKey = new HDPrivateKey(xprivkey);
       const object = privKey.toObject();
-      _.each(_.values(object), function(value) {
+      for (const value of Object.values(object)) {
         expect(BufferUtil.isBuffer(value)).to.equal(false);
-      });
+      }
     });
     it('roundtrips toObject', function() {
       expect(HDPrivateKey.fromObject(new HDPrivateKey(xprivkey).toObject()).xprivkey).to.equal(xprivkey);

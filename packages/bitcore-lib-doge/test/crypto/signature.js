@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const should = require('chai').should();
 const bitcore = require('../..');
 
@@ -330,10 +329,10 @@ describe('Signature', function() {
         [(Signature.SIGHASH_ANYONECANPAY | Signature.SIGHASH_SINGLE) + 1, false],
         [(Signature.SIGHASH_ANYONECANPAY | Signature.SIGHASH_ALL) - 1, false],
       ];
-      _.each(testCases, function(testCase) {
+      for (const testCase of testCases) {
         sig.nhashtype = testCase[0];
         sig.hasDefinedHashtype().should.equal(testCase[1]);
-      });
+      }
     });
   });
 
