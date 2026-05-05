@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const BufferUtil = require('../util/buffer');
 const JSUtil = require('../util/js');
 const $ = require('../util/preconditions');

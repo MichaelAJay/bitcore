@@ -1,7 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
-
 /**
  * Determines whether a string contains only hexadecimal values
  *

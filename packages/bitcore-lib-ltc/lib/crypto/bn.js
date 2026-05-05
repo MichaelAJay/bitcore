@@ -1,7 +1,6 @@
 'use strict';
 
 const BN = require('bn.js');
-const _ = require('lodash');
 const BufferUtil = require('../util/buffer');
 const $ = require('../util/preconditions');
 

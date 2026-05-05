@@ -1,7 +1,6 @@
 'use strict';
 
 const assert = require('assert');
-const _ = require('lodash');
 const BN = require('./crypto/bn');
 const Hash = require('./crypto/hash');
 const Point = require('./crypto/point');
@@ -74,7 +73,7 @@ function HDPublicKey(arg) {
 HDPublicKey.isValidPath = function(arg) {
   if (typeof arg === 'string') {
     const indexes = HDPrivateKey._getDerivationIndexes(arg);
-    return indexes !== null && _.every(indexes, HDPublicKey.isValidPath);
+    return indexes !== null && indexes.every(index => HDPublicKey.isValidPath(index));
   }
 
   if (typeof arg === 'number') {
@@ -180,7 +179,7 @@ HDPublicKey.prototype._deriveWithNumber = function(index, hardened) {
 
 HDPublicKey.prototype._deriveFromString = function(path) {
   /* jshint maxcomplexity: 8 */
-  if (_.includes(path, "'")) {
+  if (path.includes("'")) {
     throw new hdErrors.InvalidIndexCantDeriveHardened();
   } else if (!HDPublicKey.isValidPath(path)) {
     throw new hdErrors.InvalidPath(path);
@@ -204,7 +203,7 @@ HDPublicKey.prototype._deriveFromString = function(path) {
  * @return {boolean}
  */
 HDPublicKey.isValidSerialized = function(data, network) {
-  return _.isNull(HDPublicKey.getSerializedError(data, network));
+  return HDPublicKey.getSerializedError(data, network) === null;
 };
 
 /**
@@ -259,7 +258,7 @@ HDPublicKey._validateNetwork = function(data, networkArg) {
 };
 
 HDPublicKey.prototype._buildFromPrivate = function (arg) {
-  const args = _.clone(arg._buffers);
+  const args = { ...arg._buffers };
   const point = Point.getG().mul(BN.fromBuffer(args.privateKey));
   args.publicKey = Point.pointToCompressed(point);
   args.version = BufferUtil.integerAsBuffer(Network.get(BufferUtil.integerFromBuffer(args.version)).xpubkey);

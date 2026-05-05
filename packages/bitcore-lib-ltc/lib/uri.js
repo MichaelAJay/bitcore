@@ -1,7 +1,6 @@
 'use strict';
 
 const URL = require('url');
-const _ = require('lodash');
 const Address = require('./address');
 const Unit = require('./unit');
 

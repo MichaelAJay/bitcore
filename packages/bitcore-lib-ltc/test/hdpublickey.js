@@ -1,7 +1,6 @@
 'use strict';
 
 /* jshint unused: false */
-const _ = require('lodash');
 const assert = require('assert');
 const should = require('chai').should();
 const expect = require('chai').expect;

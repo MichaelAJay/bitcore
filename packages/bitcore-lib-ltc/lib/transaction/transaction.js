@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const Address = require('../address');
 const BN = require('../crypto/bn');
 const Hash = require('../crypto/hash');
@@ -1099,8 +1098,8 @@ Transaction.prototype._calculateWeight = function() {
 };
 
 Transaction.prototype._removeOutput = function(index) {
-  const output = this.outputs[index];
-  this.outputs = _.without(this.outputs, output);
+  const targetOutput = this.outputs[index];
+  this.outputs = this.outputs.filter(output => output !== targetOutput);
   this._outputAmount = undefined;
 };
 
@@ -1210,8 +1209,8 @@ Transaction.prototype.removeInput = function(txId, outputIndex) {
   if (index < 0 || index >= this.inputs.length) {
     throw new errors.Transaction.InvalidIndex(index, this.inputs.length);
   }
-  const input = this.inputs[index];
-  this.inputs = _.without(this.inputs, input);
+  const targetInput = this.inputs[index];
+  this.inputs = this.inputs.filter(input => input !== targetInput);
   this._inputAmount = undefined;
   this._updateChangeOutput();
 };

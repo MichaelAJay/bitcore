@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const BN = require('../crypto/bn');
 const BufferUtil = require('../util/buffer');
 const $ = require('../util/preconditions');

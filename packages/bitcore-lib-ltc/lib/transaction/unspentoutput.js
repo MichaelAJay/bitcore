@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const Address = require('../address');
 const Script = require('../script');
 const Unit = require('../unit');
@@ -37,7 +36,7 @@ function UnspentOutput(data) {
     throw new Error('Invalid TXID in object', data);
   }
   const outputIndex = data.vout == null ? data.outputIndex : data.vout;
-  if (!typeof outputIndex === 'number') {
+  if (typeof outputIndex !== 'number') {
     throw new Error('Invalid outputIndex, received ' + outputIndex);
   }
   $.checkArgument(data.scriptPubKey != null || data.script != null,

@@ -1,7 +1,6 @@
 'use strict';
 
 const inherits = require('inherits');
-const _ = require('lodash');
 const Signature = require('../crypto/signature');
 const errors = require('../errors');
 const PublicKey = require('../publickey');

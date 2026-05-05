@@ -2,7 +2,6 @@
 
 const should = require('chai').should();
 const expect = require('chai').expect;
-const _ = require('lodash');
 const sinon = require('sinon');
 const bitcore = require('../..');
 const transactionVector = require('../data/tx_creation');

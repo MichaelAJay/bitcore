@@ -1,6 +1,5 @@
 'use strict';
 
-const _ = require('lodash');
 const BufferWriter = require('../../encoding/bufferwriter');
 const errors = require('../../errors');
 const Script = require('../../script');
