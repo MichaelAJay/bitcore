@@ -2,7 +2,6 @@
 
 
 const assert = require('assert');
-const _ = require('lodash');
 const BN = require('./crypto/bn');
 const Hash = require('./crypto/hash');
 const Point = require('./crypto/point');
@@ -72,7 +71,7 @@ function HDPrivateKey(arg) {
 HDPrivateKey.isValidPath = function(arg, hardened) {
   if (typeof arg === 'string') {
     const indexes = HDPrivateKey._getDerivationIndexes(arg);
-    return indexes !== null && _.every(indexes, HDPrivateKey.isValidPath);
+    return indexes !== null && indexes.every(index => HDPrivateKey.isValidPath(index));
   }
 
   if (typeof arg === 'number') {
@@ -97,11 +96,11 @@ HDPrivateKey._getDerivationIndexes = function(path) {
   const steps = path.split('/');
 
   // Special cases:
-  if (_.includes(HDPrivateKey.RootElementAlias, path)) {
+  if (HDPrivateKey.RootElementAlias.includes(path)) {
     return [];
   }
 
-  if (!_.includes(HDPrivateKey.RootElementAlias, steps[0])) {
+  if (!HDPrivateKey.RootElementAlias.includes(steps[0])) {
     return null;
   }
 
@@ -121,7 +120,7 @@ HDPrivateKey._getDerivationIndexes = function(path) {
     return index;
   });
 
-  return _.some(indexes, isNaN) ? null : indexes;
+  return indexes.some(index => isNaN(index)) ? null : indexes;
 };
 
 /**
