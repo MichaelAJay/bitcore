@@ -45,7 +45,7 @@ BufferReader.prototype.eof = function() {
 BufferReader.prototype.finished = BufferReader.prototype.eof;
 
 BufferReader.prototype.read = function(len) {
-  $.checkArgument(!_.isUndefined(len), 'Must specify a length');
+  $.checkArgument(len != null, 'Must specify a length');
   const buf = this.buf.slice(this.pos, this.pos + len);
   this.pos = this.pos + len;
   return buf;

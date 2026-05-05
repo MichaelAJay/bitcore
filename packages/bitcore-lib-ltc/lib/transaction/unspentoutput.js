@@ -40,12 +40,12 @@ function UnspentOutput(data) {
   if (!typeof outputIndex === 'number') {
     throw new Error('Invalid outputIndex, received ' + outputIndex);
   }
-  $.checkArgument(!_.isUndefined(data.scriptPubKey) || !_.isUndefined(data.script),
+  $.checkArgument(data.scriptPubKey != null || data.script != null,
     'Must provide the scriptPubKey for that output!');
   const script = new Script(data.scriptPubKey || data.script);
-  $.checkArgument(!_.isUndefined(data.amount) || !_.isUndefined(data.satoshis),
+  $.checkArgument(data.amount != null || data.satoshis != null,
     'Must provide an amount for the output');
-  const amount = !_.isUndefined(data.amount) ? new Unit.fromBTC(data.amount).toSatoshis() : data.satoshis;
+  const amount = data.amount != null ? new Unit.fromBTC(data.amount).toSatoshis() : data.satoshis;
   $.checkArgument(typeof amount === 'number', 'Amount must be a number');
   JSUtil.defineImmutable(this, {
     address: address,
