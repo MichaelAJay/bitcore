@@ -373,12 +373,12 @@ describe('Interpreter', function() {
 
     const testAllFixtures = function(set) {
       let c = 0;
-      set.forEach(function(vector) {
+      for (const vector of set) {
         if (vector.length === 1) {
-          return;
+          continue;
         }
         c++;
-
+  
         let witness, amount;
         if (_.isArray(vector[0])) {
           const extra = vector.shift();
@@ -389,18 +389,18 @@ describe('Interpreter', function() {
         } else {
           return;
         }
-
+  
         const fullScriptString = vector[0] + ' ' + vector[1];
         const expected = vector[3] == 'OK';
         const descstr = vector[4];
-
+  
         const comment = descstr ? (' (' + descstr + ')') : '';
         it('should ' + vector[3] + ' script_tests ' +
           'vector #' + c + ': ' + fullScriptString + comment,
         function() {
           testFixture(vector, expected, witness, amount);
         });
-      });
+      }
     };
     testAllFixtures(script_tests);
 
@@ -408,7 +408,7 @@ describe('Interpreter', function() {
   describe('bitcoind transaction evaluation fixtures', function() {
     const test_txs = function(set, expected) {
       let c = 0;
-      set.forEach(function(vector) {
+      for (const vector of set) {
         if (vector.length === 1) {
           return;
         }
@@ -421,7 +421,7 @@ describe('Interpreter', function() {
 
           const map = {};
           const mapprevOutValues = {};
-          inputs.forEach(function(input) {
+          for (const input of inputs) {
             const txid = input[0];
             let txoutnum = input[1];
             const scriptPubKeyStr = input[2];
@@ -432,11 +432,12 @@ describe('Interpreter', function() {
             if (input.length >= 4) {
               mapprevOutValues[txid + ':' + txoutnum] = input[3];
             }
-          });
+          };
 
           const tx = new Transaction(txhex);
           let allInputsVerified = true;
-          tx.inputs.forEach(function(txin, j) {
+          for (let j = 0; j < tx.inputs.length; j++) {
+            const txin = tx.inputs[j];
             if (txin.isNull()) {
               return;
             }
@@ -453,14 +454,14 @@ describe('Interpreter', function() {
             if (!verified) {
               allInputsVerified = false;
             }
-          });
+          }
           let txVerified = tx.verify();
           txVerified = (txVerified === true) ? true : false;
           allInputsVerified = allInputsVerified && txVerified;
           allInputsVerified.should.equal(expected);
 
         });
-      });
+      };
     };
     test_txs(tx_valid, true);
     test_txs(tx_invalid, false);

@@ -413,14 +413,8 @@ Transaction.prototype.fromBufferReader = function(reader) {
 
 
 Transaction.prototype.toObject = Transaction.prototype.toJSON = function toObject() {
-  const inputs = [];
-  this.inputs.forEach(function(input) {
-    inputs.push(input.toObject());
-  });
-  const outputs = [];
-  this.outputs.forEach(function(output) {
-    outputs.push(output.toObject());
-  });
+  const inputs = this.inputs.map(input => input.toObject());
+  const outputs = this.outputs.map(output => output.toObject());
   const obj = {
     hash: this.hash,
     version: this.version,
@@ -1123,20 +1117,23 @@ Transaction.prototype.removeOutput = function(index) {
  */
 Transaction.prototype.sort = function() {
   this.sortInputs(function(inputs) {
-    const copy = Array.prototype.concat.apply([], inputs);
-    let i = 0;
-    copy.forEach((x) => { x.i = i++;});
+    const copy = inputs.map((input, i) => {
+      input.i = i;
+      return input;
+    });
     copy.sort(function(first, second) {
       return compare(first.prevTxId, second.prevTxId)
         || first.outputIndex - second.outputIndex
         || first.i - second.i;  // to ensure stable sort
     });
+
     return copy;
   });
   this.sortOutputs(function(outputs) {
-    const copy = Array.prototype.concat.apply([], outputs);
-    let i = 0;
-    copy.forEach((x) => { x.i = i++;});
+    const copy = outputs.map((output, i) => {
+      output.i = i;
+      return output;
+    });
     copy.sort(function(first, second) {
       return first.satoshis - second.satoshis
         || compare(first.script.toBuffer(), second.script.toBuffer())
