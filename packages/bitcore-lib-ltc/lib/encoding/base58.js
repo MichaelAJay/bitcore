@@ -1,20 +1,20 @@
 'use strict';
 
-var _ = require('lodash');
-var bs58 = require('bs58');
+const bs58 = require('bs58');
+const _ = require('lodash');
 
-var ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'.split('');
+const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'.split('');
 
-var Base58 = function Base58(obj) {
+const Base58 = function Base58(obj) {
   /* jshint maxcomplexity: 8 */
   if (!(this instanceof Base58)) {
     return new Base58(obj);
   }
   if (Buffer.isBuffer(obj)) {
-    var buf = obj;
+    const buf = obj;
     this.fromBuffer(buf);
   } else if (typeof obj === 'string') {
-    var str = obj;
+    const str = obj;
     this.fromString(str);
   } else if (obj) {
     this.set(obj);
@@ -25,7 +25,7 @@ Base58.validCharacters = function validCharacters(chars) {
   if (Buffer.isBuffer(chars)) {
     chars = chars.toString();
   }
-  return _.every(_.map(chars, function(char) { return (ALPHABET.includes(char)) }));
+  return _.every(_.map(chars, function(char) { return (ALPHABET.includes(char)); }));
 };
 
 Base58.prototype.set = function(obj) {
@@ -53,7 +53,7 @@ Base58.prototype.fromBuffer = function(buf) {
 };
 
 Base58.prototype.fromString = function(str) {
-  var buf = Base58.decode(str);
+  const buf = Base58.decode(str);
   this.buf = buf;
   return this;
 };

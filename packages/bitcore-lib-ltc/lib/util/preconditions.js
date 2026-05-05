@@ -1,7 +1,7 @@
 'use strict';
 
-var errors = require('../errors');
-var _ = require('lodash');
+const _ = require('lodash');
+const errors = require('../errors');
 
 module.exports = {
   checkState: function(condition, message) {
@@ -18,7 +18,7 @@ module.exports = {
     argumentName = argumentName || '(unknown name)';
     if (_.isString(type)) {
       if (type === 'Buffer') {
-        var BufferUtil = require('./buffer');
+        const BufferUtil = require('./buffer');
         if (!BufferUtil.isBuffer(argument)) {
           throw new errors.InvalidArgumentType(argument, type, argumentName);
         }

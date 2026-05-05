@@ -1,12 +1,13 @@
 'use strict';
 
-var litecore = module.exports;
+const litecore = module.exports;
 
 // module information
 litecore.version = 'v' + require('./package.json').version;
+
 litecore.versionGuard = function(version) {
   if (version !== undefined) {
-    var message = 'More than one instance of litecore-lib found. ' +
+    const message = 'More than one instance of litecore-lib found. ' +
       'Please make sure to require litecore-lib and check that submodules do' +
       ' not also include their own litecore-lib dependency.';
     throw new Error(message);
@@ -61,6 +62,7 @@ litecore.Unit = require('./lib/unit');
 litecore.deps = {};
 litecore.deps.bnjs = require('bn.js');
 litecore.deps.bs58 = require('bs58');
+
 litecore.deps.Buffer = Buffer;
 litecore.deps.elliptic = require('elliptic');
 litecore.deps.scryptsy = require('scryptsy');
