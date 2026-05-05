@@ -36,7 +36,7 @@ function UnspentOutput(data) {
     // TODO: Use the errors library
     throw new Error('Invalid TXID in object', data);
   }
-  const outputIndex = _.isUndefined(data.vout) ? data.outputIndex : data.vout;
+  const outputIndex = data.vout == null ? data.outputIndex : data.vout;
   if (!typeof outputIndex === 'number') {
     throw new Error('Invalid outputIndex, received ' + outputIndex);
   }

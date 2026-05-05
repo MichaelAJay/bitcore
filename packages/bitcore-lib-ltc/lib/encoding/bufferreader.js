@@ -9,7 +9,7 @@ const BufferReader = function BufferReader(buf) {
   if (!(this instanceof BufferReader)) {
     return new BufferReader(buf);
   }
-  if (_.isUndefined(buf)) {
+  if (buf == null) {
     return;
   }
   if (Buffer.isBuffer(buf)) {
@@ -190,7 +190,7 @@ BufferReader.prototype.reverse = function() {
 };
 
 BufferReader.prototype.readReverse = function(len) {
-  if (_.isUndefined(len)) {
+  if (len == null) {
     len = this.buf.length;
   }
   const buf = this.buf.slice(this.pos, this.pos + len);
