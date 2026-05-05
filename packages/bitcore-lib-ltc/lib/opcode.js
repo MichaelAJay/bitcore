@@ -12,9 +12,9 @@ function Opcode(num) {
 
   let value;
 
-  if (_.isNumber(num)) {
+  if (typeof num === 'number') {
     value = num;
-  } else if (_.isString(num)) {
+  } else if (typeof num === 'string') {
     value = Opcode.map[num];
   } else {
     throw new TypeError('Unrecognized num type: "' + typeof(num) + '" for Opcode');
@@ -33,12 +33,12 @@ Opcode.fromBuffer = function(buf) {
 };
 
 Opcode.fromNumber = function(num) {
-  $.checkArgument(_.isNumber(num));
+  $.checkArgument(typeof num === 'number');
   return new Opcode(num);
 };
 
 Opcode.fromString = function(str) {
-  $.checkArgument(_.isString(str));
+  $.checkArgument(typeof str === 'string');
   const value = Opcode.map[str];
   if (typeof value === 'undefined') {
     throw new TypeError('Invalid opcodestr');
@@ -67,7 +67,7 @@ Opcode.prototype.toString = function() {
 };
 
 Opcode.smallInt = function(n) {
-  $.checkArgument(_.isNumber(n), 'Invalid Argument: n should be number');
+  $.checkArgument(typeof n === 'number', 'Invalid Argument: n should be number');
   $.checkArgument(n >= 0 && n <= 16, 'Invalid Argument: n must be between 0 and 16');
   if (n === 0) {
     return Opcode('OP_0');

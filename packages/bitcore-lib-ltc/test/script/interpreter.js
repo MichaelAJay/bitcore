@@ -380,7 +380,7 @@ describe('Interpreter', function() {
         c++;
   
         let witness, amount;
-        if (_.isArray(vector[0])) {
+        if (Array.isArray(vector[0])) {
           const extra = vector.shift();
           amount = extra.pop() * 1e8;
           witness = extra.map(function(x) { 

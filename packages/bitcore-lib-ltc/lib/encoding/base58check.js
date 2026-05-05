@@ -24,10 +24,10 @@ Base58Check.prototype.set = function(obj) {
 };
 
 Base58Check.validChecksum = function validChecksum(data, checksum) {
-  if (_.isString(data)) {
+  if (typeof data === 'string') {
     data = new Buffer.from(Base58.decode(data));
   }
-  if (_.isString(checksum)) {
+  if (typeof checksum === 'string') {
     checksum = new Buffer.from(Base58.decode(checksum));
   }
   if (!checksum) {

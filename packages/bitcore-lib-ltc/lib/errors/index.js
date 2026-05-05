@@ -10,7 +10,7 @@ function format(message, args) {
 }
 const traverseNode = function(parent, errorDefinition) {
   const NodeError = function() {
-    if (_.isString(errorDefinition.message)) {
+    if (typeof errorDefinition.message === 'string') {
       this.message = format(errorDefinition.message, arguments);
     } else if (_.isFunction(errorDefinition.message)) {
       this.message = errorDefinition.message.apply(null, arguments);

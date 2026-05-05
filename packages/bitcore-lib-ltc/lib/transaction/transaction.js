@@ -49,7 +49,7 @@ function Transaction(serialized, opts) {
       this.fromString(serialized);
     } else if (BufferUtil.isBuffer(serialized)) {
       this.fromBuffer(serialized);
-    } else if (_.isObject(serialized)) {
+    } else if (typeof serialized === 'object' && serialized !== null) {
       this.fromObject(serialized, opts);
     } else {
       throw new errors.InvalidArgument('Must provide an object or string to deserialize a transaction');
@@ -436,7 +436,7 @@ Transaction.prototype.toObject = Transaction.prototype.toJSON = function toObjec
 
 Transaction.prototype.fromObject = function fromObject(arg, opts) {
   /* jshint maxstatements: 20 */
-  $.checkArgument(_.isObject(arg) || arg instanceof Transaction);
+  $.checkArgument(typeof arg === 'object' && arg !== null || arg instanceof Transaction);
   let transaction;
   if (arg instanceof Transaction) {
     transaction = arg.toObject();

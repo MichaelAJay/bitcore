@@ -16,11 +16,11 @@ const BufferReader = function BufferReader(buf) {
     this.set({
       buf: buf
     });
-  } else if (_.isString(buf)) {
+  } else if (typeof buf === 'string') {
     this.set({
       buf: Buffer.from(buf, 'hex'),
     });
-  } else if (_.isObject(buf)) {
+  } else if (typeof buf === 'object' && buf !== null) {
     const obj = buf;
     this.set(obj);
   } else {

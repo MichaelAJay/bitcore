@@ -29,7 +29,7 @@ function UnspentOutput(data) {
   if (!(this instanceof UnspentOutput)) {
     return new UnspentOutput(data);
   }
-  $.checkArgument(_.isObject(data), 'Must provide an object from where to extract data');
+  $.checkArgument(typeof data === 'object' && data !== null, 'Must provide an object from where to extract data');
   const address = data.address ? new Address(data.address) : undefined;
   const txId = data.txid ? data.txid : data.txId;
   if (!txId || !JSUtil.isHexaString(txId) || txId.length > 64) {
@@ -37,7 +37,7 @@ function UnspentOutput(data) {
     throw new Error('Invalid TXID in object', data);
   }
   const outputIndex = _.isUndefined(data.vout) ? data.outputIndex : data.vout;
-  if (!_.isNumber(outputIndex)) {
+  if (!typeof outputIndex === 'number') {
     throw new Error('Invalid outputIndex, received ' + outputIndex);
   }
   $.checkArgument(!_.isUndefined(data.scriptPubKey) || !_.isUndefined(data.script),
@@ -46,7 +46,7 @@ function UnspentOutput(data) {
   $.checkArgument(!_.isUndefined(data.amount) || !_.isUndefined(data.satoshis),
     'Must provide an amount for the output');
   const amount = !_.isUndefined(data.amount) ? new Unit.fromBTC(data.amount).toSatoshis() : data.satoshis;
-  $.checkArgument(_.isNumber(amount), 'Amount must be a number');
+  $.checkArgument(typeof amount === 'number', 'Amount must be a number');
   JSUtil.defineImmutable(this, {
     address: address,
     txId: txId,

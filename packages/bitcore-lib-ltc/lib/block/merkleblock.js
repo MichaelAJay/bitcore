@@ -28,7 +28,7 @@ function MerkleBlock(arg) {
   let info = {};
   if (BufferUtil.isBuffer(arg)) {
     info = MerkleBlock._fromBufferReader(BufferReader(arg));
-  } else if (_.isObject(arg)) {
+  } else if (typeof arg === 'object' && arg !== null) {
     let header;
     if (arg.header instanceof BlockHeader) {
       header = arg.header;
@@ -127,8 +127,8 @@ MerkleBlock.prototype.toObject = MerkleBlock.prototype.toJSON = function toObjec
  * @returns {Boolean} - True/False whether this MerkleBlock is Valid
  */
 MerkleBlock.prototype.validMerkleTree = function validMerkleTree() {
-  $.checkState(_.isArray(this.flags), 'MerkleBlock flags is not an array');
-  $.checkState(_.isArray(this.hashes), 'MerkleBlock hashes is not an array');
+  $.checkState(Array.isArray(this.flags), 'MerkleBlock flags is not an array');
+  $.checkState(Array.isArray(this.hashes), 'MerkleBlock hashes is not an array');
 
   // Can't have more hashes than numTransactions
   if (this.hashes.length > this.numTransactions) {
