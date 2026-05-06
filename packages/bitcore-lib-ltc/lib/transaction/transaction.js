@@ -26,6 +26,8 @@ const PublicKeyInput = Input.PublicKey;
 const MultiSigScriptHashInput = Input.MultiSigScriptHash;
 const MultiSigInput = Input.MultiSig;
 
+const objectToString = Object.prototype.toString;
+
 /**
  * Represents a transaction, a set of inputs and outputs to change ownership of tokens
  *
@@ -504,7 +506,7 @@ Transaction.prototype.lockUntilDate = function(time) {
   if (!isNaN(time) && time < Transaction.NLOCKTIME_BLOCKHEIGHT_LIMIT) {
     throw new errors.Transaction.LockTimeTooEarly();
   }
-  if (_.isDate(time)) {
+  if (objectToString.call(time) === '[object Date]') {
     time = time.getTime() / 1000;
   }
 
@@ -960,12 +962,13 @@ Transaction.prototype._getOutputAmount = function() {
  */
 Transaction.prototype._getInputAmount = function() {
   if (this._inputAmount == null) {
-    this._inputAmount = _.sumBy(this.inputs, function(input) {
-      if (input.output == null) {
+    this._inputAmount = 0;
+    for (const input of this.inputs) {
+      if (input.output === null) {
         throw new errors.Transaction.Input.MissingPreviousOutput();
       }
-      return input.output.satoshis;
-    });
+      this._inputAmount += input.output.satoshis;
+    }
   }
   return this._inputAmount;
 };
@@ -1144,13 +1147,22 @@ Transaction.prototype.sort = function() {
 };
 
 /**
- * Randomize this transaction's outputs ordering. The shuffling algorithm is a
- * version of the Fisher-Yates shuffle, provided by lodash's _.shuffle().
+ * Randomize this transaction's outputs ordering using Fisher-Yates.
  *
  * @return {Transaction} this
  */
 Transaction.prototype.shuffleOutputs = function() {
-  return this.sortOutputs(_.shuffle);
+  /** @TODO replace per pkg implementation with top-level implementation */
+  return this.sortOutputs(function(outputs) {
+    const shuffled = [...outputs];
+
+    for (let i = shuffled.length - 1; i >= 1; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    return shuffled;
+  });
 };
 
 /**
@@ -1182,8 +1194,9 @@ Transaction.prototype.sortInputs = function(sortingFunction) {
 };
 
 Transaction.prototype._newOutputOrder = function(newOutputs) {
+  // TODO: Tighten this validation to account for duplicate output references (e.g. [A, A, B] = [A, B, B] should fail validation, but doesn't currently).
   const isInvalidSorting = (this.outputs.length !== newOutputs.length ||
-                          _.difference(this.outputs, newOutputs).length !== 0);
+    !this.outputs.every(output => newOutputs.includes(output)));
   if (isInvalidSorting) {
     throw new errors.Transaction.InvalidSorting();
   }

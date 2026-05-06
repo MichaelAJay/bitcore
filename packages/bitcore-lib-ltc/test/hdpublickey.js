@@ -97,10 +97,10 @@ describe('HDPublicKey interface', function() {
     });
 
     it('can generate a json that has a particular structure', function() {
-      assert(_.isEqual(
+      assert.deepEqual(
         new HDPublicKey(JSON.parse(json)).toJSON(),
         new HDPublicKey(xpubkey).toJSON()
-      ));
+      );
     });
 
     it('builds from a buffer object', function() {
