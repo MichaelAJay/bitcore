@@ -27,7 +27,7 @@ export function command(args: CommonArgs) {
     .option('--page <page>', 'Page number to view (only 1 proposal is displayed per page)')
     .option('--raw', 'Print raw transaction proposal objects instead of formatted output')
     .option('--listAll', 'List all pending proposals (overrides action mode in --command mode)')
-    .option('--export [filename]', `Export all proposals to a file (default: ~/${wallet.name}_txproposals_<timestamp>.json)`)   
+    .option('--export [filename]', `Export all proposals to a file (default: ~/${wallet.name}_txproposals_<timestamp>.json)`)
     .option('--file <filename>', `Specify the file to save the tx proposal to when using \`--action export\` (default: ~/${wallet.name}_txproposal_<proposalId>.json)`)
     .parse(process.argv);
 
@@ -108,15 +108,24 @@ export async function getTxProposals(
       for (const txp of txps) {
         const chain = txp.chain || txp.coin;
         const nativeCurrency = (await wallet.getNativeCurrency(true)).displayCode;
-        const currency = (txp.tokenAddress ? await wallet.getToken({ tokenAddress: txp.tokenAddress }) : null)?.displayCode || nativeCurrency;
+        let tokenObj: ITokenObj;
+        if (txp.tokenAddress) {
+          tokenObj = await wallet.getToken({ tokenAddress: txp.tokenAddress }) || undefined;
+        }
+        const currency = tokenObj?.displayCode || nativeCurrency;
         const compactId = Utils.compactString(txp.id, 20);
-        const status = txp.status === 'broadcasted' ? Utils.colorText(txp.status, 'green')
-          : txp.status === 'rejected' ? Utils.colorText(txp.status, 'red')
-            : txp.status === 'accepted' ? Utils.colorText(txp.status, 'yellow')
-              : txp.status;
+        let statusColor: string;
+        if (txp.status === 'broadcasted') {
+          statusColor = 'green';
+        } else if (txp.status === 'rejected') {
+          statusColor = 'red';
+        } else if (txp.status === 'accepted') {
+          statusColor = 'yellow';
+        }
+        const status = statusColor ? Utils.colorText(txp.status, statusColor as 'green' | 'red' | 'yellow') : txp.status;
         lines.push(`  ID:    ${compactId}`);
         lines.push(`  Chain: ${chain.toUpperCase()} (${Utils.capitalize(txp.network)})`);
-        lines.push(`  Amount: ${Utils.renderAmount(currency, txp.amount)} | Fee: ${Utils.renderAmount(nativeCurrency, txp.fee)}`);
+        lines.push(`  Amount: ${Utils.renderAmount(currency, txp.amount, tokenObj)} | Fee: ${Utils.renderAmount(nativeCurrency, txp.fee)}`);
         lines.push(`  Status: ${status} | Creator: ${txp.creatorName}`);
         lines.push(`  Created: ${Utils.formatDate(txp.createdOn * 1000)}`);
         if (txp.txid) {
@@ -126,8 +135,9 @@ export async function getTxProposals(
           lines.push(`  Msg:   ${txp.message}`);
         }
         // Missing signatures info
-        const missingSigsCnt = txp.requiredSignatures - (txp.actions?.filter(a => a.type === 'accept').length || 0);
-        lines.push(`  Sig:   ${txp.actions?.filter(a => a.type === 'accept').length || 0}/${txp.requiredSignatures} (${missingSigsCnt} missing)`);
+        const acceptedSigs = txp.actions?.filter(a => a.type === 'accept').length || 0;
+        const missingSigsCnt = txp.requiredSignatures - acceptedSigs;
+        lines.push(`  Sig:   ${acceptedSigs}/${txp.requiredSignatures} (${missingSigsCnt} missing)`);
         lines.push('');
       }
       prompt.note(lines.join(os.EOL), 'Transaction Proposals');
@@ -299,7 +309,7 @@ export async function getTxProposals(
   }, {
     pageSize: 1,
     initialPage: opts.page,
-    exitOn1Page: !!opts.command && !opts.listAll
+    exitOn1Page: !!opts.command
   });
 
   return { action: 'menu' };
