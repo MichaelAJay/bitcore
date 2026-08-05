@@ -740,6 +740,40 @@ describe('TSS', function() {
       e.message.should.include('TSS_ROUND_ALREADY_DONE');
     });
 
+    it('should roll back an encrypted signing session without masking the original error', async function() {
+      const password = 'encrypted-tss-password';
+      party0TssKey.encrypt(password, { iter: 1 });
+
+      try {
+        should.not.exist(party0TssKey.keychain.privateKeyShare);
+
+        const encryptedSig = await new TssSign({
+          baseUrl: '/bws/api',
+          request: request(app),
+          credentials: party0Creds,
+          tssKey: party0TssKey,
+        }).restoreSession({ session: export0, password });
+
+        const error = new Promise<Error>(r => encryptedSig.once('error', r));
+        encryptedSig.subscribe({ timeout: 10 });
+        const e = await error;
+        encryptedSig.unsubscribe();
+
+        e.message.should.include('TSS_ROUND_ALREADY_DONE');
+        e.message.should.not.include('password is required');
+
+        const retryError = new Promise<Error>(r => encryptedSig.once('error', r));
+        encryptedSig.subscribe({ timeout: 10 });
+        const retry = await retryError;
+        encryptedSig.unsubscribe();
+
+        retry.message.should.include('TSS_ROUND_ALREADY_DONE');
+        retry.message.should.not.include('password is required');
+      } finally {
+        party0TssKey.decrypt(password);
+      }
+    });
+
     it(happyPath('should do round 3'), async function() {
       const response0 = new Promise(r => sig0.once('roundsubmitted', r));
       const response1 = new Promise(r => sig1.once('roundsubmitted', r));
