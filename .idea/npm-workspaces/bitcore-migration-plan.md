@@ -262,11 +262,11 @@ RED: compile client production code in a disposable prepared dependency tree wit
 
 GREEN / acceptance:
 
-- [ ] Client production compile succeeds without building or cleaning node; its declared `main` and `types` paths exist.
-- [ ] Runner fixtures execute all seven configured package scripts in the specified order. A clean real root compile is the Phase 2.1 integration gate, after workspace selectors become available.
-- [ ] With the existing installation prepared, node/client tests and client test type-checking pass; repeat under the candidate workspace installation in Phase 5.
-- [ ] Hashes of node output do not change merely from client production compilation.
-- [ ] The runner stops before dependents when a prerequisite fails and returns nonzero. Successful logs show wallet-service template and CLI postbuild lifecycles were executed.
+- [x] Client production compile succeeds without building or cleaning node; its declared `main` and `types` paths exist.
+- [x] Runner fixtures execute all seven configured package scripts in the specified order. A clean real root compile is the Phase 2.1 integration gate, after workspace selectors become available.
+- [x] With the existing installation prepared, node/client tests and client test type-checking pass; repeat under the candidate workspace installation in Phase 5.
+- [x] Hashes of node output do not change merely from client production compilation.
+- [ ] The runner stops before dependents when a prerequisite fails, is interrupted, or exits nonzero, and returns nonzero itself (verified for all three, including a fix for a reviewer-found bug where a child that handled a forwarded signal and exited 0 let the sequence continue -- see green-evidence.md). Successful logs show wallet-service template and CLI postbuild lifecycles were executed (not yet verified -- this requires real `npm run compile --workspace=<name>` against the actual wallet-service/CLI packages, which needs Task 2.1's root workspace cutover, and CLI's postbuild launcher behavior specifically needs Task 1.5, not yet implemented; left open for that integration).
 
 ### Task 1.4 — Declare dependencies exposed by the new installation layout
 
