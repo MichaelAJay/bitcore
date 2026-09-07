@@ -1,0 +1,57 @@
+{
+  "task": "1.1 — Resolve shared build tools and config by package ownership",
+  "status": "RED captured; GREEN/acceptance work not started (stopped at RED as instructed)",
+  "sourceCommit": "5b2f96d7aad6d3930443111dd22a9f23826d44de",
+  "branch": "npm-workspaces-migration",
+  "environment": { "node": "v22.16.0", "npm": "10.9.2", "platform": "darwin" },
+  "redEvidence": {
+    "file": "packages/bitcore-build/test/hoisted-layout.test.cjs",
+    "test": "old helper cannot find browserify or its config when tools are hoisted to the workspace root",
+    "command": "node --test packages/bitcore-build/test/hoisted-layout.test.cjs",
+    "cwd": "repository root",
+    "exitCode": 0,
+    "exitCodeNote": "0 is the correct outcome here: the test's own assertions are what encode the RED condition (it asserts the failure occurs), matching the convention already used by test/workspaces/check-runtime.test.cjs's 'rejects Node 20' style tests. The failure being verified is inside the test body, not the test-runner's own exit status.",
+    "logPath": ".idea/npm-workspaces/evidence-1.1/hoisted-layout.log",
+    "diagnosedRootCause": "packages/bitcore-build/index.js resolves Browserify/Karma/WebdriverIO/Istanbul/Mocha binaries and its own karma.conf.js/wdio.conf.js by concatenating fixed-depth, process.cwd()-relative strings ('./node_modules/@bitpay-labs/bitcore-build/node_modules/.bin/<tool>', falling back to './node_modules/.bin/<tool>'), rather than resolving from the owning package's own location (e.g. __dirname or the module's resolved manifest/bin metadata). This physical-path assumption matches only Lerna's current per-package bootstrap layout, where each consumer gets its own nested 'node_modules/@bitpay-labs/bitcore-build' symlink pointing at a copy of bitcore-build that has its own nested 'node_modules/.bin' with its dependencies. Under npm workspaces, bitcore-build is linked once at the repository root and its dependencies hoist there too, so neither hardcoded depth exists under any consumer directory, even though the tool and the workspace are genuinely installed.",
+    "fixtureDesign": "Revised after review (see revisionFollowUp below) to be self-contained. A disposable temp directory holds: (1) the helper under test as a byte-for-byte copy of today's real index.js/karma.conf.js, placed inside the fixture at '<fixtureRoot>/node_modules/@bitpay-labs/bitcore-build' with its own minimal package.json -- not a symlink out to the real repository; (2) real npm-style tool packages for browserify/karma/wdio at the fixture root, each with its own package.json 'bin' field and target script, with '<fixtureRoot>/node_modules/.bin/<name>' generated as an npm-style relative symlink from that manifest, not a hand-placed stub; (3) gulp/gulp-rename/gulp-shell/gulp-terser -- the execution engine that runs the helper, not the tool-resolution behavior this task is about -- reused via symlink from the real repository's already-installed copies at packages/bitcore-build/node_modules, since reimplementing a build tool's own dependency tree would not add coverage; (4) a consumer package directory '<fixtureRoot>/packages/consumer' with no node_modules of its own at all. Node's module resolution realpaths through symlinks for cache identity, so the copied helper's own 'require(\"gulp-shell\")' resolves to the same real, cached module object as the test's, letting the test capture the exact command constructed without altering the helper's logic. The unmodified helper content is exercised for real: startGulp('lib', {}) followed by invoking the returned 'browser:uncompressed' gulp-shell task.",
+    "assertionsInFixture": [
+      "require.resolve('browserify/package.json', {paths:[helperDir]}) resolves, and its declared bin target exists on disk -- browserify is genuinely reachable via real npm manifest/bin metadata from the helper's own location, not merely a nested stub",
+      "fs.existsSync of the nested per-consumer .bin path is false under this layout",
+      "fs.existsSync of the consumer-local .bin fallback path is false under this layout",
+      "fs.existsSync of the default karma.conf.js lookup path is false under this layout (same root cause reaches the shared browser config, not only the Browserify binary)",
+      "require.resolve('@bitpay-labs/bitcore-build') from the consumer directory *does* succeed (the helper package itself is genuinely discoverable via normal require() resolution -- this is a path-assumption bug, not a missing-dependency baseline defect)",
+      "the exact command string startGulp constructs for 'browser:uncompressed' is captured (by wrapping gulp-shell's shared, cached 'task' function before requiring the helper) and asserted to embed the literal wrong fallback path './node_modules/.bin/browserify', not merely inferred from the eventual failure",
+      "invoking the real 'browser:uncompressed' task still fails (nonzero child exit) -- confirmed by actual execution, with the shell's own 'No such file or directory' diagnostic naming that exact wrong path, corroborating the captured-command assertion rather than substituting for it"
+    ],
+    "observedDiagnostic": "/bin/sh: ./node_modules/.bin/browserify: No such file or directory",
+    "isolationNote": "The helper under test and the browserify/karma/wdio tool packages are self-contained inside the disposable fixture directory; only the gulp/gulp-shell/gulp-rename/gulp-terser execution engine is reused by symlink from the real repository's install, and is not part of the tool-resolution behavior under test. No files in the working tree were deleted or modified to obtain this RED."
+  },
+  "revisionFollowUp": {
+    "reviewFeedback": "Keep the RED-only scope, but make the helper and tool-resolution fixture self-contained: place the helper inside the temporary workspace and provide tool packages with manifest/bin metadata at its root. Verify resolution from the helper's location, and assert the specific missing-path diagnostic rather than any command failure. Correct the evidence's dependency-free/tool-resolution claims. Preserve this RED evidence, then use success and generated-bundle assertions when GREEN is authorized.",
+    "changesMade": [
+      "Replaced the symlink to the real packages/bitcore-build directory with a byte-for-byte copy of index.js/karma.conf.js placed inside the fixture, plus a minimal package.json, so the fixture no longer reaches into the real repository tree for the helper under test.",
+      "Replaced naked stub scripts under node_modules/.bin with real npm-style tool packages (package.json 'bin' field + target script) for browserify/karma/wdio at the fixture root, with node_modules/.bin symlinks generated from those manifests -- matching how npm itself creates .bin entries.",
+      "Added an explicit resolution check from the helper's own directory (require.resolve('browserify/package.json', {paths:[helperDir]})) proving the tool is genuinely reachable via manifest/bin metadata from where the helper lives, not just from the consumer.",
+      "Replaced the previous generic '/failed with exit code/' message match with (a) capturing the exact command string the helper constructs and asserting it embeds the specific wrong, nonexistent fallback path, and (b) a corroborating real-execution failure check, rather than treating any command failure as sufficient.",
+      "Corrected the fixtureDesign/assertionsInFixture/isolationNote fields above, which previously overstated self-containment (the helper was symlinked to the real repository) and the tool-resolution claim (stub .bin scripts were not real, resolvable npm packages)."
+    ],
+    "reproducedAfterFix": "node --test packages/bitcore-build/test/hoisted-layout.test.cjs -> 1 pass, 0 fail; observed diagnostic unchanged: '/bin/sh: ./node_modules/.bin/browserify: No such file or directory'. Re-verified via git diff that eslint.config.mjs's override and the pre-existing-defect note both remain accurate against the corrected file.",
+    "deferredToGreen": "Success and generated-bundle assertions (the fixed helper actually locates and runs browserify/karma/wdio and produces the expected browser test bundle) are explicitly deferred to when Task 1.1's GREEN/acceptance work is authorized, per the review; this revision does not add them."
+  },
+  "auxiliaryChange": {
+    "file": "eslint.config.mjs",
+    "change": "Added 'packages/bitcore-build/test/**/*.cjs' to the existing 'Dependency-free .cjs scripts and their fixtures/tests' override (previously only 'scripts/workspaces/**/*.cjs' and 'test/workspaces/**/*.cjs'), so the new fixture test's require() calls are warnings, matching the established convention for this category of file, not new errors.",
+    "verification": "npx eslint packages/bitcore-build/test/hoisted-layout.test.cjs -> 0 errors, 6 warnings (all @typescript-eslint/no-require-imports, the same rule/severity already accepted for scripts/workspaces and test/workspaces .cjs fixtures). Confirmed via `git stash`/`eslint .`/`git stash pop` that root-wide `eslint .` reports the identical pre-existing problem count (1716291) before this change as after (1716297, a difference of exactly the 6 new warnings) -- the massive pre-existing count is an unrelated baseline condition, not something introduced or worsened here.",
+    "logPath": ".idea/npm-workspaces/evidence-1.1/lint-new-file.log"
+  },
+  "preExistingBaselineDefectNoted": {
+    "description": "bitcore-build's own existing source (index.js, karma.conf.js, wdio.conf.js) was not in the eslint.config.mjs override list applied to the sibling legacy-CommonJS packages (bitcore-lib*, bitcore-p2p*, bitcore-tss), so it currently lints with 18 errors / 2 warnings under the root config (require-imports as errors, plus a few unrelated unused-vars/no-var findings in karma.conf.js/wdio.conf.js). This predates this task's changes and was not touched, per the plan's instruction to record unrelated pre-existing defects separately rather than fold their repair into this task.",
+    "command": "npx eslint packages/bitcore-build/index.js packages/bitcore-build/karma.conf.js packages/bitcore-build/wdio.conf.js",
+    "result": "20 problems (18 errors, 2 warnings), unchanged by this task's work"
+  },
+  "notCompleted": [
+    "Work items (resolving tool/config paths from package ownership, karma/WDIO consumer-relative bundle loading, declaring nyc/Mocha at their owner, removing bitcore-build's unusable own 'gulp test' entry) are not implemented yet.",
+    "GREEN/acceptance checkboxes for Task 1.1 (updated-helper fixture pass, standalone-installation fixture, real Node/browser suite regressions for the four primitive libraries + mnemonic + three P2P packages, no fixed-depth assumptions remaining) are unchecked and unattempted.",
+    "This stops intentionally at RED per explicit instruction; do not read the above as Task 1.1 completion."
+  ]
+}
