@@ -35,8 +35,6 @@
     "test": "npm run compile && node copyTestWallets && nyc mocha 'build/test/**/*.js'",
     "build": "tsc",
     "build:prod": "tsc -p tsconfig.prod.json",
-    "postbuild": "node createBin -v",
-    "postbuild:prod": "npm run postbuild",
     "clean": "rm -rf ./build",
     "compile": "npm run clean && npm run build",
     "lint": "eslint .",
