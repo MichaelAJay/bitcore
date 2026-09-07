@@ -179,9 +179,9 @@ npm pkg get name --workspaces
 
 Acceptance:
 
-- Inventory reports 18 Lerna members, seven compile scripts, one watcher, 17 root package test aliases, and three excluded benchmarks; adjust only for documented intervening source changes.
-- The workspace command fails with `No workspaces found!` before migration. This was observed during review; run it separately from an all-success shell sequence because its expected exit is nonzero.
-- A baseline results file identifies each command as passed, failed with a signature, or blocked by a named prerequisite. No unexecuted suite is described as passing.
+- [x] Inventory reports 18 Lerna members, seven compile scripts, one watcher, 17 root package test aliases, and three excluded benchmarks; adjust only for documented intervening source changes.
+- [x] The workspace command fails with `No workspaces found!` before migration. This was observed during review; run it separately from an all-success shell sequence because its expected exit is nonzero.
+- [x] A baseline results file identifies each command as passed, failed with a signature, or blocked by a named prerequisite. No unexecuted suite is described as passing.
 
 RED/GREEN: workspace discovery is RED; the rest is baseline capture.
 
@@ -193,13 +193,13 @@ Work: create `scripts/workspaces/verify.cjs` with `manifests`, `lock`, `engines`
 
 Acceptance:
 
-- `manifests` checks exact workspace membership, private root, Node/npm policy, internal range compatibility, declared compile membership, and prohibited local dependency protocols.
-- `lock` checks backend workspace records/links, agreement with manifests, absence of backend child locks, and preservation of the two excluded-project locks.
-- `engines` checks installed backend dependency Node declarations, allowing only the exact socks5-client legacy exception. Report the resolution path and reject each new mismatch. Exclude Insight/benchmark trees; TSS dependencies receive no exception from the unrelated P2P package.
-- `links` resolves every internal dependency from the consuming package's location and records both the lexical resolved path returned by that consumer-originating resolution and the canonical real path after `realpath`. It compares the canonical path to the intended local package and detects nested registry copies, but `realpath` equality alone is not treated as sufficient success: the verifier groups internal resolutions by intended workspace target and also fails if different consumers reach that same workspace through different lexical npm-created symlink aliases, even when those aliases canonicalize to the same physical directory. A given internal workspace must not be reachable through multiple npm-created symlink aliases from different consumers unless an explicit, reviewed exception exists. A failure identifies the workspace package, the consumer, the lexical resolved path, the canonical real path, the conflicting consumer/path, and the expected canonical workspace location. Do not rely only on `npm ls` or on resolution from root.
-- `artifacts` has build and test-fixture stages. Build checks entry points, types, templates and CLI behavior after install; test-fixture checks copied data only after its owning test command. Do not import server entry points that start services.
-- Each mode produces an actionable failure with the consumer/package/path and nonzero status. Fixtures exercise an incompatible internal range, wrong target, missing artifact, and accidental Insight inclusion.
-- The target manifest/lock modes fail on the baseline for the diagnosed absent workspace contract; after cutover all modes pass. Missing verifier files are not RED evidence.
+- [ ] `manifests` checks exact workspace membership, private root, Node/npm policy, internal range compatibility, declared compile membership, and prohibited local dependency protocols.
+- [ ] `lock` checks backend workspace records/links, agreement with manifests, absence of backend child locks, and preservation of the two excluded-project locks.
+- [ ] `engines` checks installed backend dependency Node declarations, allowing only the exact socks5-client legacy exception. Report the resolution path and reject each new mismatch. Exclude Insight/benchmark trees; TSS dependencies receive no exception from the unrelated P2P package.
+- [ ] `links` resolves every internal dependency from the consuming package's location and records both the lexical resolved path returned by that consumer-originating resolution and the canonical real path after `realpath`. It compares the canonical path to the intended local package and detects nested registry copies, but `realpath` equality alone is not treated as sufficient success: the verifier groups internal resolutions by intended workspace target and also fails if different consumers reach that same workspace through different lexical npm-created symlink aliases, even when those aliases canonicalize to the same physical directory. A given internal workspace must not be reachable through multiple npm-created symlink aliases from different consumers unless an explicit, reviewed exception exists. A failure identifies the workspace package, the consumer, the lexical resolved path, the canonical real path, the conflicting consumer/path, and the expected canonical workspace location. Do not rely only on `npm ls` or on resolution from root.
+- [ ] `artifacts` has build and test-fixture stages. Build checks entry points, types, templates and CLI behavior after install; test-fixture checks copied data only after its owning test command. Do not import server entry points that start services.
+- [ ] Each mode produces an actionable failure with the consumer/package/path and nonzero status. Fixtures exercise an incompatible internal range, wrong target, missing artifact, and accidental Insight inclusion.
+- [ ] The target manifest/lock modes fail on the baseline for the diagnosed absent workspace contract; after cutover all modes pass. Missing verifier files are not RED evidence.
 
 ## Phase 1 — Remove package-layout and build-order assumptions
 
@@ -221,10 +221,10 @@ RED: run the old helper in a fixture with tools hoisted to the fixture root and 
 
 GREEN / acceptance:
 
-- The same fixture generates and locates a browser test bundle with the updated helper, including a checkout path containing spaces.
-- A nested standalone installation fixture also passes, protecting external users of bitcore-build.
-- Actual Node and headless-browser suites for the four primitive libraries and mnemonic pass in the existing Lerna installation after the helper change. Three P2P Node suites pass. Repeat these against workspaces in Phase 5.
-- Active helper commands contain no fixed installation-depth assumptions. Karma and WDIO both locate the correct consuming package's bundle.
+- [ ] The same fixture generates and locates a browser test bundle with the updated helper, including a checkout path containing spaces.
+- [ ] A nested standalone installation fixture also passes, protecting external users of bitcore-build.
+- [ ] Actual Node and headless-browser suites for the four primitive libraries and mnemonic pass in the existing Lerna installation after the helper change. Three P2P Node suites pass. Repeat these against workspaces in Phase 5.
+- [ ] Active helper commands contain no fixed installation-depth assumptions. Karma and WDIO both locate the correct consuming package's bundle.
 
 ### Task 1.2 — Make TypeScript type discovery work with hoisting
 
@@ -238,9 +238,9 @@ RED: in a disposable installation fixture, place required typings at root and om
 
 GREEN / acceptance:
 
-- Logging, crypto-wallet-core, wallet-service, wallet-client, and client compile with required types hoisted and legitimate conflicting versions nested.
-- Client custom types remain included; application and test type coverage is not silently removed.
-- Node and CLI compilation still passes; the actual `tsc` selected for each package is recorded. Insight stays on its independently installed toolchain.
+- [ ] Logging, crypto-wallet-core, wallet-service, wallet-client, and client compile with required types hoisted and legitimate conflicting versions nested.
+- [ ] Client custom types remain included; application and test type coverage is not silently removed.
+- [ ] Node and CLI compilation still passes; the actual `tsc` selected for each package is recorded. Insight stays on its independently installed toolchain.
 
 ### Task 1.3 — Separate client production compilation from node-dependent tests
 
@@ -260,11 +260,11 @@ RED: compile client production code in a disposable prepared dependency tree wit
 
 GREEN / acceptance:
 
-- Client production compile succeeds without building or cleaning node; its declared `main` and `types` paths exist.
-- Runner fixtures execute all seven configured package scripts in the specified order. A clean real root compile is the Phase 2.1 integration gate, after workspace selectors become available.
-- With the existing installation prepared, node/client tests and client test type-checking pass; repeat under the candidate workspace installation in Phase 5.
-- Hashes of node output do not change merely from client production compilation.
-- The runner stops before dependents when a prerequisite fails and returns nonzero. Successful logs show wallet-service template and CLI postbuild lifecycles were executed.
+- [ ] Client production compile succeeds without building or cleaning node; its declared `main` and `types` paths exist.
+- [ ] Runner fixtures execute all seven configured package scripts in the specified order. A clean real root compile is the Phase 2.1 integration gate, after workspace selectors become available.
+- [ ] With the existing installation prepared, node/client tests and client test type-checking pass; repeat under the candidate workspace installation in Phase 5.
+- [ ] Hashes of node output do not change merely from client production compilation.
+- [ ] The runner stops before dependents when a prerequisite fails and returns nonzero. Successful logs show wallet-service template and CLI postbuild lifecycles were executed.
 
 ### Task 1.4 — Declare dependencies exposed by the new installation layout
 
@@ -282,11 +282,11 @@ Work:
 
 Acceptance:
 
-- Every confirmed example has a manifest fix or a documented non-runtime disposition tied to its source use.
-- A source import audit reports no unexplained undeclared direct dependency in migrated runtime/build paths.
-- An audit of runtime/build paths for cross-workspace sibling filesystem imports is complete; each finding is either converted to the declared package specifier or given a documented non-runtime disposition.
-- Existing-layout package entry imports still work on Node 22. The candidate native-load and isolated packed-consumer gates are owned by Tasks 2.2 and 5.1.
-- Dependency changes list reason and before/after resolved versions. There are no unrelated major upgrades, forced overrides, or blanket peer-resolution bypasses.
+- [ ] Every confirmed example has a manifest fix or a documented non-runtime disposition tied to its source use.
+- [ ] A source import audit reports no unexplained undeclared direct dependency in migrated runtime/build paths.
+- [ ] An audit of runtime/build paths for cross-workspace sibling filesystem imports is complete; each finding is either converted to the declared package specifier or given a documented non-runtime disposition.
+- [ ] Existing-layout package entry imports still work on Node 22. The candidate native-load and isolated packed-consumer gates are owned by Tasks 2.2 and 5.1.
+- [ ] Dependency changes list reason and before/after resolved versions. There are no unrelated major upgrades, forced overrides, or blanket peer-resolution bypasses.
 
 RED/GREEN: use a consumer-resolution failure or isolated import failure when present. Existing transitive resolution can already pass, so declaration review is also an acceptance criterion.
 
@@ -300,10 +300,10 @@ RED: the isolated npm 10.9.2 experiment recorded in `bitcore-review-evidence.jso
 
 GREEN / acceptance:
 
-- The same cold fixture with a pre-existing tracked launcher produces a runnable root `.bin` executable after its first install. This behavior was confirmed in review; reproduce it in the implementation test.
-- The real CLI launcher is tracked and executable before any install/build; its path is relative to its own file and portable between checkouts.
-- Existing CLI compilation/tests pass and leave the launcher unchanged. No tracked-file churn is caused by `createBin`.
-- The actual first workspace-install CLI test is owned by 2.1 and repeated in 2.2.
+- [ ] The same cold fixture with a pre-existing tracked launcher produces a runnable root `.bin` executable after its first install. This behavior was confirmed in review; reproduce it in the implementation test.
+- [ ] The real CLI launcher is tracked and executable before any install/build; its path is relative to its own file and portable between checkouts.
+- [ ] Existing CLI compilation/tests pass and leave the launcher unchanged. No tracked-file churn is caused by `createBin`.
+- [ ] The actual first workspace-install CLI test is owned by 2.1 and repeated in 2.2.
 
 ## Phase 2 — Cut over installation and lock ownership
 
@@ -339,13 +339,13 @@ npm ls --workspaces --depth=0
 git diff --exit-code -- package.json package-lock.json packages
 ```
 
-- Run the final diff check relative to the committed candidate, not the pre-migration commit. Installation does not rewrite tracked manifests or locks.
-- Discovery returns exactly 18 scoped workspace names; no nested benchmark or Insight appears.
-- Normal root `npm ci` installs and compiles all seven packages in the specified order, with scripts enabled and no stale client/node outputs. It never invokes Lerna or performs backend child installs.
-- Each backend internal dependency resolves locally from its consumer, and every consumer-originating internal resolution points to the intended workspace: no internal workspace is exposed through multiple lexical npm-created symlink aliases, the verifier reports both the lexical resolved path and the canonical real path for each resolution, and no nested registry copy substitutes for a local workspace. The lock has workspace links rather than registry tarballs for those internal edges.
-- No backend child lock is regenerated. The only tracked locks are root, Insight, and the Bitcoin benchmark.
-- Runtime preflight accepts Node 22 with exact selected npm and rejects unsupported major/tool versions in a fixture. Engine verification rejects each unexpected dependency mismatch; the single socks5-client exception is visible in evidence and does not suppress P2P proxy regressions.
-- Root lock contains no Lerna dependency tree attributable to removed orchestration. Root install/compile commands have no Lerna invocation; remaining command, CI, and Docker references are removed in the following phases before release.
+- [ ] Run the final diff check relative to the committed candidate, not the pre-migration commit. Installation does not rewrite tracked manifests or locks.
+- [ ] Discovery returns exactly 18 scoped workspace names; no nested benchmark or Insight appears.
+- [ ] Normal root `npm ci` installs and compiles all seven packages in the specified order, with scripts enabled and no stale client/node outputs. It never invokes Lerna or performs backend child installs.
+- [ ] Each backend internal dependency resolves locally from its consumer, and every consumer-originating internal resolution points to the intended workspace: no internal workspace is exposed through multiple lexical npm-created symlink aliases, the verifier reports both the lexical resolved path and the canonical real path for each resolution, and no nested registry copy substitutes for a local workspace. The lock has workspace links rather than registry tarballs for those internal edges.
+- [ ] No backend child lock is regenerated. The only tracked locks are root, Insight, and the Bitcoin benchmark.
+- [ ] Runtime preflight accepts Node 22 with exact selected npm and rejects unsupported major/tool versions in a fixture. Engine verification rejects each unexpected dependency mismatch; the single socks5-client exception is visible in evidence and does not suppress P2P proxy regressions.
+- [ ] Root lock contains no Lerna dependency tree attributable to removed orchestration. Root install/compile commands have no Lerna invocation; remaining command, CI, and Docker references are removed in the following phases before release.
 
 ### Task 2.2 — Verify cold installation, native modules, and CLI linking
 
@@ -357,12 +357,12 @@ RED/GREEN: Task 1.5 owns the bin-link RED. Here reproduce its GREEN in the real 
 
 GREEN / acceptance:
 
-- A new checkout with no installed dependencies or generated output completes `npm ci` and root compile on the pinned Node 22 Linux environment; repeat on the supported developer platform.
-- Load client `bcrypt`, `leveldown`, and `secp256k1` from the client's resolution context and perform minimal operations using the installed APIs. Run the TSS signing tests; merely finding `.node` files does not prove ABI compatibility.
-- `./node_modules/.bin/bitcore-cli --help` exits zero after the first install. Its target is inside this checkout; no absolute path from another checkout is embedded.
-- Loading mnemonic, P2P, TSS, and crypto-wallet-core together produces no duplicate primitive-library-instance error; native Node module identity matches the intended local libraries. Treat that native-load identity check as distinct from resolver-path identity: also confirm that each of these primitive libraries is reached through one intended workspace-resolution path across the tested consumers, not merely one canonical real path after symlink dereferencing. The previous LavaMoat failure occurred at the resolver-path layer even though Node's native loader had already canonicalized identity correctly, so a passing native-load check alone does not establish the resolver-path invariant this task requires.
-- Both installs leave root/excluded-project lock hashes unchanged. A second ordinary `npm ci` in the same disposable checkout also succeeds.
-- A temporary incompatible workspace manifest change causes `npm ci` or the contract verifier to fail, rather than silently selecting an unintended registry package. Restore the fixture after the check.
+- [ ] A new checkout with no installed dependencies or generated output completes `npm ci` and root compile on the pinned Node 22 Linux environment; repeat on the supported developer platform.
+- [ ] Load client `bcrypt`, `leveldown`, and `secp256k1` from the client's resolution context and perform minimal operations using the installed APIs. Run the TSS signing tests; merely finding `.node` files does not prove ABI compatibility.
+- [ ] `./node_modules/.bin/bitcore-cli --help` exits zero after the first install. Its target is inside this checkout; no absolute path from another checkout is embedded.
+- [ ] Loading mnemonic, P2P, TSS, and crypto-wallet-core together produces no duplicate primitive-library-instance error; native Node module identity matches the intended local libraries. Treat that native-load identity check as distinct from resolver-path identity: also confirm that each of these primitive libraries is reached through one intended workspace-resolution path across the tested consumers, not merely one canonical real path after symlink dereferencing. The previous LavaMoat failure occurred at the resolver-path layer even though Node's native loader had already canonicalized identity correctly, so a passing native-load check alone does not establish the resolver-path invariant this task requires.
+- [ ] Both installs leave root/excluded-project lock hashes unchanged. A second ordinary `npm ci` in the same disposable checkout also succeeds.
+- [ ] A temporary incompatible workspace manifest change causes `npm ci` or the contract verifier to fail, rather than silently selecting an unintended registry package. Restore the fixture after the check.
 
 #### Optional / informational LavaMoat topology probe
 
@@ -401,12 +401,12 @@ Work:
 
 Acceptance:
 
-- Every existing root test alias executes the intended package, forwards an argument in a fixture, and returns failure when its child fails.
-- Start commands resolve the expected package cwd and local modules in an isolated service smoke run.
-- Watch starts the client compiler, rebuilds after an isolated source edit, and terminates without leaving child processes after SIGINT.
-- Docker build routing runs exactly node then wallet-service, and stops if the first build fails; test routing with fixture commands before building images.
-- `packages/build` works from root and from `packages/`. No bootstrap alias or hidden Lerna fallback remains.
-- Full required script regressions are covered by the final matrix; no broad `npm test --workspaces` is substituted for tests needing different prerequisites.
+- [ ] Every existing root test alias executes the intended package, forwards an argument in a fixture, and returns failure when its child fails.
+- [ ] Start commands resolve the expected package cwd and local modules in an isolated service smoke run.
+- [ ] Watch starts the client compiler, rebuilds after an isolated source edit, and terminates without leaving child processes after SIGINT.
+- [ ] Docker build routing runs exactly node then wallet-service, and stops if the first build fails; test routing with fixture commands before building images.
+- [ ] `packages/build` works from root and from `packages/`. No bootstrap alias or hidden Lerna fallback remains.
+- [ ] Full required script regressions are covered by the final matrix; no broad `npm test --workspaces` is substituted for tests needing different prerequisites.
 
 RED/GREEN: routing uses regression evidence; injected child-command failure validates failure propagation without changing application code.
 
@@ -423,11 +423,11 @@ npm run insight:install
 npm run insight:build
 ```
 
-- `insight:build` remains a single install-and-build command. Both scripts run on Node 22 and use Insight's own locked TypeScript 4.6.3/tooling dependencies.
-- Build produces `packages/insight/build/index.html` and relocated assets under `build/insight/`, consistent with `postbuild.sh`.
-- A second install/build is reproducible and leaves the root and Insight locks unchanged.
-- Root backend `npm ci` does not install Insight or run its lifecycle scripts.
-- Dependencies added to Insight are documented as independent prefix-scoped operations; backend dependency changes use `npm install <dependency> --workspace=<scoped-name>` and update root lock only.
+- [ ] `insight:build` remains a single install-and-build command. Both scripts run on Node 22 and use Insight's own locked TypeScript 4.6.3/tooling dependencies.
+- [ ] Build produces `packages/insight/build/index.html` and relocated assets under `build/insight/`, consistent with `postbuild.sh`.
+- [ ] A second install/build is reproducible and leaves the root and Insight locks unchanged.
+- [ ] Root backend `npm ci` does not install Insight or run its lifecycle scripts.
+- [ ] Dependencies added to Insight are documented as independent prefix-scoped operations; backend dependency changes use `npm install <dependency> --workspace=<scoped-name>` and update root lock only.
 
 RED/GREEN: before/after regression, plus negative workspace-membership check. Existing unrelated Insight failures must be recorded, not solved through an unplanned React toolchain migration.
 
@@ -448,11 +448,11 @@ Work:
 
 Acceptance:
 
-- CircleCI config validates using its supported validator, and contains no missing checksum input.
-- Empty-cache and warm-cache runs both install from the same root lock and pass workspace link checks before testing.
-- Test jobs can resolve local scoped dependencies after workspace attachment; none relies on child lockfiles or installed registry copies of local packages.
-- All 17 package aliases are accounted for as actual jobs/checks with required browsers/databases/chain services. Tool versions and command logs are retained.
-- Root compile is not run concurrently with tests in one shared filesystem. Recompilation per isolated job is acceptable; optimizing it is outside this task.
+- [ ] CircleCI config validates using its supported validator, and contains no missing checksum input.
+- [ ] Empty-cache and warm-cache runs both install from the same root lock and pass workspace link checks before testing.
+- [ ] Test jobs can resolve local scoped dependencies after workspace attachment; none relies on child lockfiles or installed registry copies of local packages.
+- [ ] All 17 package aliases are accounted for as actual jobs/checks with required browsers/databases/chain services. Tool versions and command logs are retained.
+- [ ] Root compile is not run concurrently with tests in one shared filesystem. Recompilation per isolated job is acceptable; optimizing it is outside this task.
 
 RED/GREEN: use baseline/current CI results and a fresh cache namespace. Do not fabricate a broken CI configuration solely to create RED.
 
@@ -480,10 +480,10 @@ docker build --no-cache -t bitcore-node-workspaces-test -f packages/bitcore-node
 docker build --no-cache -t bitcore-bws-workspaces-test -f packages/bitcore-wallet-service/Dockerfile .
 ```
 
-- All three images build from a clean source context; logs show the pinned Node/npm and one root install with successful compile.
-- Workspace resolution verifier passes inside each image. Node's server output and wallet-service templates/worker entry files exist.
-- Against isolated test services, node/API returns HTTP 200 with the configured chain list at `/api/status/enabled-chains`; BWS returns HTTP 200 with `serviceVersion` at `/bws/api/v1/version/`. Also confirm required background workers reach their established startup state. A tailing shell can remain alive after workers fail; container liveness alone is insufficient.
-- No image depends on host package directories, host-built native modules, or Lerna.
+- [ ] All three images build from a clean source context; logs show the pinned Node/npm and one root install with successful compile.
+- [ ] Workspace resolution verifier passes inside each image. Node's server output and wallet-service templates/worker entry files exist.
+- [ ] Against isolated test services, node/API returns HTTP 200 with the configured chain list at `/api/status/enabled-chains`; BWS returns HTTP 200 with `serviceVersion` at `/bws/api/v1/version/`. Also confirm required background workers reach their established startup state. A tailing shell can remain alive after workers fail; container liveness alone is insufficient.
+- [ ] No image depends on host package directories, host-built native modules, or Lerna.
 
 ### Task 4.2 — Use local scoped workspaces in RPC test containers
 
@@ -502,11 +502,11 @@ RED: run a resolution probe in the old test image that requires the resolved cry
 
 GREEN / acceptance:
 
-- `docker compose -f packages/crypto-rpc/docker-compose.yml config` validates after path changes.
-- A no-cache RPC test image build succeeds from repository root without any host node_modules or prebuilt crypto-wallet-core.
-- Inside the runner, resolving `@bitpay-labs/crypto-wallet-core` points to `/bitcore/packages/crypto-wallet-core/ts_build/src/index.js`; internal primitive dependencies also point to workspace sources.
-- Existing `npm run test:crypto-rpc` reaches Hardhat compile/deploy/test and RPC tests with the expected chain endpoints, retaining c8's configured coverage thresholds.
-- No scoped dependency is substituted by an unscoped bind mount. The supported test runner does not invoke `migrate`; the unchanged defect in the separate start service is recorded with its follow-up scope.
+- [ ] `docker compose -f packages/crypto-rpc/docker-compose.yml config` validates after path changes.
+- [ ] A no-cache RPC test image build succeeds from repository root without any host node_modules or prebuilt crypto-wallet-core.
+- [ ] Inside the runner, resolving `@bitpay-labs/crypto-wallet-core` points to `/bitcore/packages/crypto-wallet-core/ts_build/src/index.js`; internal primitive dependencies also point to workspace sources.
+- [ ] Existing `npm run test:crypto-rpc` reaches Hardhat compile/deploy/test and RPC tests with the expected chain endpoints, retaining c8's configured coverage thresholds.
+- [ ] No scoped dependency is substituted by an unscoped bind mount. The supported test runner does not invoke `migrate`; the unchanged defect in the separate start service is recorded with its follow-up scope.
 
 ### Task 4.3 — Make local test containers independent of host dependency layout
 
@@ -518,11 +518,11 @@ Work: retain source editing through the existing `/bitcore` bind mount, but use 
 
 Acceptance:
 
-- From a disposable host checkout with no dependencies/output, `./ci.sh build` followed by a documented package test command installs/prepares and runs successfully in Linux.
-- Repeat with host dependencies present: the test process still loads only container-installed native dependencies.
-- Container workspace links point to visible local sources; compile output is available to the test runner after mounts are applied.
-- Tests preserve configured DB/chain environment and cwd. Install failure stops the test runner before application tests begin.
-- Commands use isolated Compose project/data resources and clean up those resources without touching another developer's services.
+- [ ] From a disposable host checkout with no dependencies/output, `./ci.sh build` followed by a documented package test command installs/prepares and runs successfully in Linux.
+- [ ] Repeat with host dependencies present: the test process still loads only container-installed native dependencies.
+- [ ] Container workspace links point to visible local sources; compile output is available to the test runner after mounts are applied.
+- [ ] Tests preserve configured DB/chain environment and cwd. Install failure stops the test runner before application tests begin.
+- [ ] Commands use isolated Compose project/data resources and clean up those resources without touching another developer's services.
 
 RED/GREEN: reproduce the bind mount hiding image dependencies in the old layout, then pass the same cold-host test with the chosen storage approach.
 
@@ -545,12 +545,12 @@ Work:
 
 Acceptance:
 
-- Dry-run output names each selected package once, excludes private packages, reports tarball paths, propagates failures, and makes no publish/tag/version calls.
-- Tarballs include declared `main`, `types`, bins, required shared build configs and service templates; generated entry points are not lost through `.gitignore` / `.npmignore` interaction.
-- Manifests in tarballs retain publishable semver dependencies and contain no filesystem/workspace protocols or absolute checkout paths.
-- In temporary consumers outside the monorepo, install the candidate tarballs for the complete local runtime closure together so npm cannot silently substitute released internal packages. Verify actual installed versions/paths and exercise representative public APIs and ESM RPC imports on Node 22. Servers use a separate configured smoke process.
-- Validate each package's declared direct dependencies independently of what the combined consumer happens to hoist; a consumer containing every tarball can mask missing declarations.
-- Public package versions, names, release-loop membership/order and access metadata are unchanged. Artifact-validation deduplication does not change publication policy. No registry publication is performed.
+- [ ] Dry-run output names each selected package once, excludes private packages, reports tarball paths, propagates failures, and makes no publish/tag/version calls.
+- [ ] Tarballs include declared `main`, `types`, bins, required shared build configs and service templates; generated entry points are not lost through `.gitignore` / `.npmignore` interaction.
+- [ ] Manifests in tarballs retain publishable semver dependencies and contain no filesystem/workspace protocols or absolute checkout paths.
+- [ ] In temporary consumers outside the monorepo, install the candidate tarballs for the complete local runtime closure together so npm cannot silently substitute released internal packages. Verify actual installed versions/paths and exercise representative public APIs and ESM RPC imports on Node 22. Servers use a separate configured smoke process.
+- [ ] Validate each package's declared direct dependencies independently of what the combined consumer happens to hoist; a consumer containing every tarball can mask missing declarations.
+- [ ] Public package versions, names, release-loop membership/order and access metadata are unchanged. Artifact-validation deduplication does not change publication policy. No registry publication is performed.
 
 RED/GREEN: package contents and public API behavior are regressions. Use targeted isolated-consumer RED for a confirmed missing runtime dependency or excluded build artifact.
 
@@ -562,12 +562,12 @@ Files: root README/CONTRIBUTING, node and wallet-service installation docs, Insi
 
 Acceptance:
 
-- Instructions state exact Node/npm setup, root `npm ci`, automatic compilation, explicit recompile, scoped tests, watch/start/build commands, workspace dependency edits, Insight's separate install, and supported Docker test workflows.
-- Instructions explain that a backend package directory is no longer an independently locked checkout; registry consumers still install published packages normally.
-- Bootstrap and package-by-package install instructions are replaced wherever they describe monorepo development. Ordinary consumer `npm install @bitpay-labs/...` examples remain valid.
-- Tracked executable/configuration files contain no Lerna invocation, dependency, bootstrap implementation, obsolete lock concatenation, or active stale Docker path. Historical changelog prose may mention Lerna.
-- Legacy Travis, Makefile, benchmark and manual-browser workflows each have an explicit retain/update/retire disposition; nested benchmark locks are not accidentally deleted.
-- New documentation commands are executed in the disposable acceptance checkout. No unit tests are required for prose edits.
+- [ ] Instructions state exact Node/npm setup, root `npm ci`, automatic compilation, explicit recompile, scoped tests, watch/start/build commands, workspace dependency edits, Insight's separate install, and supported Docker test workflows.
+- [ ] Instructions explain that a backend package directory is no longer an independently locked checkout; registry consumers still install published packages normally.
+- [ ] Bootstrap and package-by-package install instructions are replaced wherever they describe monorepo development. Ordinary consumer `npm install @bitpay-labs/...` examples remain valid.
+- [ ] Tracked executable/configuration files contain no Lerna invocation, dependency, bootstrap implementation, obsolete lock concatenation, or active stale Docker path. Historical changelog prose may mention Lerna.
+- [ ] Legacy Travis, Makefile, benchmark and manual-browser workflows each have an explicit retain/update/retire disposition; nested benchmark locks are not accidentally deleted.
+- [ ] New documentation commands are executed in the disposable acceptance checkout. No unit tests are required for prose edits.
 
 ### Task 5.3 — Run the final acceptance matrix and record the handoff
 
@@ -602,10 +602,10 @@ Service tests may need MongoDB, Bitcoin, Geth, Erigon, Ripple and other package-
 
 Final acceptance:
 
-- Every required task criterion and matrix gate has a result and linked log. Blocked prerequisites are resolved before declaring migration complete; separately scoped baseline defects are listed outside the required migration gates.
-- Remaining unrelated baseline defects have explicit out-of-scope dispositions and unchanged reproduction evidence. No migrated behavior, script assertion, or coverage threshold is weakened to pass acceptance.
-- No unrequested application API, public package version, runtime-major, or release-policy change is bundled into the migration.
-- Handoff lists changed files, commands, remaining separately scoped defects, and the exact tested commit/toolchain.
+- [ ] Every required task criterion and matrix gate has a result and linked log. Blocked prerequisites are resolved before declaring migration complete; separately scoped baseline defects are listed outside the required migration gates.
+- [ ] Remaining unrelated baseline defects have explicit out-of-scope dispositions and unchanged reproduction evidence. No migrated behavior, script assertion, or coverage threshold is weakened to pass acceptance.
+- [ ] No unrequested application API, public package version, runtime-major, or release-policy change is bundled into the migration.
+- [ ] Handoff lists changed files, commands, remaining separately scoped defects, and the exact tested commit/toolchain.
 
 ## Integration and rollback
 
