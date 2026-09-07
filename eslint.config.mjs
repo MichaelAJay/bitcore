@@ -111,6 +111,20 @@ export default defineConfig([
       '@typescript-eslint/no-unused-vars': 'warn',
     }
   },
+  {
+    // Dependency-free .cjs scripts and their fixtures/tests: `.cjs` forces
+    // CommonJS regardless of root package.json, so `require` is the only
+    // option, not a style choice -- same rationale as the legacy-package
+    // override above.
+    files: [
+      'scripts/workspaces/**/*.cjs',
+      'test/workspaces/**/*.cjs',
+    ],
+    languageOptions: { sourceType: 'commonjs' },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'warn',
+    }
+  },
   // Test files -- needs to be last so it can override other settings
   {
     files: ['**/test/**/*.{ts,js}'],
