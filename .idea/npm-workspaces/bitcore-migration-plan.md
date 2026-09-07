@@ -305,10 +305,12 @@ RED: the isolated npm 10.9.2 experiment recorded in `bitcore-review-evidence.jso
 
 GREEN / acceptance:
 
-- [ ] The same cold fixture with a pre-existing tracked launcher produces a runnable root `.bin` executable after its first install. This behavior was confirmed in review; reproduce it in the implementation test.
-- [ ] The real CLI launcher is tracked and executable before any install/build; its path is relative to its own file and portable between checkouts.
-- [ ] Existing CLI compilation/tests pass and leave the launcher unchanged. No tracked-file churn is caused by `createBin`.
+- [x] The same cold fixture with a pre-existing tracked launcher produces a runnable root `.bin` executable after its first install. This behavior was confirmed in review; reproduce it in the implementation test.
+- [x] The real CLI launcher is tracked and executable before any install/build; its path is relative to its own file and portable between checkouts.
+- [x] Existing CLI compilation/tests pass and leave the launcher unchanged. No tracked-file churn is caused by `createBin`.
 - [ ] The actual first workspace-install CLI test is owned by 2.1 and repeated in 2.2.
+
+Status: **implemented and verified against the real repository and a disposable fixture; the real root workspace-install gate remains owned by Task 2.1/2.2, as this item itself says.** Full RED/GREEN evidence in [evidence.md](../../artifacts/workspaces/task1.5/evidence.md).
 
 ## Phase 2 — Cut over installation and lock ownership
 
