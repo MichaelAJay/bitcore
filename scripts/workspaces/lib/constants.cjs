@@ -103,6 +103,12 @@ const EXPECTED_ROOT_SCRIPTS = {
   'insight:install': 'npm --prefix packages/insight ci --workspaces=false',
   'insight:build':
     'npm run insight:install && npm --prefix packages/insight run build --workspaces=false',
+  // Unlike the generic aliases below, client's tests import bitcore-node's
+  // build output directly (see Task 1.3), and client's own `compile` no
+  // longer builds node (it only builds client). A root compile first is
+  // what actually prepares that node output; running client's test script
+  // on its own would silently use whatever node build happens to already
+  // be on disk, stale or absent.
   'test:bitcore-client':
     'npm run compile && npm run test --workspace=@bitpay-labs/bitcore-client --',
   ...Object.fromEntries(
