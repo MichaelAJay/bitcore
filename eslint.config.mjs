@@ -119,6 +119,7 @@ export default defineConfig([
     files: [
       'scripts/workspaces/**/*.cjs',
       'test/workspaces/**/*.cjs',
+      'packages/bitcore-build/test/**/*.cjs',
     ],
     languageOptions: { sourceType: 'commonjs' },
     rules: {
