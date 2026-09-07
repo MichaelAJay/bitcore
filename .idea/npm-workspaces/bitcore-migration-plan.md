@@ -236,11 +236,13 @@ Work: allow root-hoisted and package-local typings while preserving client custo
 
 RED: in a disposable installation fixture, place required typings at root and omit their package-local copies; compile an affected package with its old configuration. Record a missing required type, not an unrelated source failure. If a package already compiles in this layout, use regression evidence for that package.
 
+RED/GREEN evidence, including reproduction commands, is recorded under `artifacts/workspaces/task1.2/` (untracked; see [red-evidence.md](../../artifacts/workspaces/task1.2/red-evidence.md) and [green-evidence.md](../../artifacts/workspaces/task1.2/green-evidence.md)).
+
 GREEN / acceptance:
 
-- [ ] Logging, crypto-wallet-core, wallet-service, wallet-client, and client compile with required types hoisted and legitimate conflicting versions nested.
-- [ ] Client custom types remain included; application and test type coverage is not silently removed.
-- [ ] Node and CLI compilation still passes; the actual `tsc` selected for each package is recorded. Insight stays on its independently installed toolchain.
+- [x] Logging, crypto-wallet-core, wallet-service, wallet-client, and client compile with required types hoisted and legitimate conflicting versions nested.
+- [x] Client custom types remain included; application and test type coverage is not silently removed.
+- [x] Node and CLI compilation still passes; the actual `tsc` selected for each package is recorded. Insight stays on its independently installed toolchain.
 
 ### Task 1.3 — Separate client production compilation from node-dependent tests
 
