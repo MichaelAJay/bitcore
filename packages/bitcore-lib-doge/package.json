@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@bitpay-labs/bitcore-build": "^11.10.4",
+    "@bitpay-labs/bitcore-lib-ltc": "^11.10.4",
     "brfs": "^2.0.1",
     "chai": "^4.2.0",
     "gulp": "^4.0.0",
