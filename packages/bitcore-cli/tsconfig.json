@@ -16,6 +16,9 @@
     "esModuleInterop": true,
     "target": "ES2020",
     "baseUrl": ".",
+    "paths": {
+      "sinon": ["./types/sinon-shim.d.ts"]
+    },
     "outDir": "build",
     "sourceMap": true
   },
