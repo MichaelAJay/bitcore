@@ -69,6 +69,7 @@
     "@types/mongodb": "3.1.22",
     "@types/node": "22.13.1",
     "@types/request": "2.47.0",
+    "@types/secp256k1": "^4.0.7",
     "@types/sinon": "4.3.3",
     "@types/through2": "2.0.33",
     "axios": "0.21.1",
