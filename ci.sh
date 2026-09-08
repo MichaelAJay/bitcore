@@ -9,7 +9,7 @@ for arg in "$@"; do
     echo ""
     echo "Examples:"
     echo "  $0 build                              # Builds the Docker images for local environment"
-    echo "  $0 run 'npm run ci:bitcore-node'      # Runs 'npm run ci:bitcore-node' in the test_runner container using local configuration"
+    echo "  $0 run 'npm run test:bitcore-node'    # Runs 'npm run test:bitcore-node' in the test_runner container using local configuration"
     echo "  $0 run chains                         # Starts all blockchains needed for testing"
     echo "  $0 down                               # Shuts down containers and removes volumes"
     exit 0
