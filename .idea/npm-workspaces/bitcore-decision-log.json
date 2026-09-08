@@ -160,6 +160,36 @@
           "reasoning": "What npm itself reports for its own exit is a real, permanent, platform-dependent fact once the leaf is confirmed reached (see summary above): on macOS npm's own child IS the leaf (no intermediate shell survives), so npm reports a clean 0 directly; on Debian/Ubuntu's dash-based `/bin/sh`, npm's own child is a distinct shell that dies from the very signal npm relays to it, before it can observe or reflect the leaf's own graceful exit, so npm instead reports that shell's signal death. Per this project's rule to prefer fixing test code over loosening production types where a real fix requires test-code surgery: this is not production code, and the assertion was checking an implementation detail (which of two legitimate npm-reported shapes occurred) rather than the actual invariant, which the test already separately verifies via the marker file proving the real leaf received and handled the signal -- that assertion is unchanged."
         }
       ]
+    },
+    {
+      "phase": 3,
+      "task": "3.1",
+      "planSection": "Phase 3 -- Preserve developer commands and CI / Task 3.1 -- Replace root and legacy command routing",
+      "commit": "bb281420a5d629aec6cf01d5af2898af025712af",
+      "date": "2026-09-08",
+      "summary": "Before changing anything, compared the real root package.json against this task's own acceptance list and found the 17 test:<directory> aliases, node/bws, watch, and build:docker already matched the target design exactly -- introduced by Task 2.1's coordinated manifest/script cutover, not this task. The genuinely remaining work was packages/build, ci.sh's stale example, and two package Makefiles using hardcoded .bin paths; each is a real, independently-verified fix rather than a restatement of already-done work.",
+      "changes": [
+        {
+          "file": "packages/build",
+          "change": "Replaced the hardcoded, unscoped, caller-cwd-relative compile loop (missing bitcore-logging/CLI/node) with a delegation to `npm --prefix <script-relative-root> run compile`, i.e. the canonical scripts/workspaces/compile.cjs runner, with `set -e`.",
+          "reasoning": "The old script's `cd $i && npm run compile || (echo ERROR && exit) && cd ..` idiom has a real bug, reproduced standalone with a synthetic 3-module version: `exit` inside the `(... && exit)` subshell only exits that subshell, so the loop actually continues past every module's failure and the whole script always exits 0 -- confirmed by running the equivalent idiom with a deliberately failing first module and observing exit 0 with all three modules 'run'. The new version was verified from three different callers' cwd (a disposable /tmp dir, packages/, and the repo root), each producing an identical full seven-package `[compile] All seven packages compiled successfully, in order.` from the already-proven compile runner."
+        },
+        {
+          "file": "ci.sh",
+          "change": "Corrected the --help example from the never-existing `npm run ci:bitcore-node` to the real `npm run test:bitcore-node` alias.",
+          "reasoning": "Grepped every package.json and the whole tree (excluding node_modules and this plan document) for `ci:bitcore` / `\"ci:` and found no script by that name anywhere; it was always a documentation typo, not a removed or renamed script. Documentation-only change to a --help string; bash -n confirmed the file still parses."
+        },
+        {
+          "file": "packages/bitcore-wallet-service/Makefile",
+          "change": "Removed (git rm).",
+          "reasoning": "Invoked `./node_modules/.bin/mocha` and istanbul directly; unreferenced by any script, doc, or CI job (grepped .circleci/config.yml and both packages' READMEs for `make`/`Makefile`, no hits); and now unsatisfiable regardless, since Task 1.4 established root as the sole declared owner of mocha/nyc for this package. The package's real `npm test` (nyc mocha, already what root's test:bitcore-wallet-service alias runs) covers the same ground without the stale coverage tool or hardcoded bin path."
+        },
+        {
+          "file": "packages/bitcore-wallet-client/Makefile",
+          "change": "Removed (git rm).",
+          "reasoning": "Same disposition as wallet-service's Makefile: unreferenced anywhere, and its `all`/`clean` targets built a browserify bundle (bitcore-wallet-client.js) that nothing in the repository imports or serves (grepped for the filename across the package, no hits) -- a dead artifact of a bundling step this package's real scripts no longer perform."
+        }
+      ]
     }
   ]
 }
