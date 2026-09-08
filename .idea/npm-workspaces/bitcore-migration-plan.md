@@ -367,12 +367,30 @@ RED/GREEN: Task 1.5 owns the bin-link RED. Here reproduce its GREEN in the real 
 
 GREEN / acceptance:
 
-- [ ] A new checkout with no installed dependencies or generated output completes `npm ci` and root compile on the pinned Node 22 Linux environment; repeat on the supported developer platform.
-- [ ] Load client `bcrypt`, `leveldown`, and `secp256k1` from the client's resolution context and perform minimal operations using the installed APIs. Run the TSS signing tests; merely finding `.node` files does not prove ABI compatibility.
-- [ ] `./node_modules/.bin/bitcore-cli --help` exits zero after the first install. Its target is inside this checkout; no absolute path from another checkout is embedded.
-- [ ] Loading mnemonic, P2P, TSS, and crypto-wallet-core together produces no duplicate primitive-library-instance error; native Node module identity matches the intended local libraries. Treat that native-load identity check as distinct from resolver-path identity: also confirm that each of these primitive libraries is reached through one intended workspace-resolution path across the tested consumers, not merely one canonical real path after symlink dereferencing. The previous LavaMoat failure occurred at the resolver-path layer even though Node's native loader had already canonicalized identity correctly, so a passing native-load check alone does not establish the resolver-path invariant this task requires.
-- [ ] Both installs leave root/excluded-project lock hashes unchanged. A second ordinary `npm ci` in the same disposable checkout also succeeds.
-- [ ] A temporary incompatible workspace manifest change causes `npm ci` or the contract verifier to fail, rather than silently selecting an unintended registry package. Restore the fixture after the check.
+- [x] A new checkout with no installed dependencies or generated output completes `npm ci` and root compile on the pinned Node 22 Linux environment; repeat on the supported developer platform.
+- [x] Load client `bcrypt`, `leveldown`, and `secp256k1` from the client's resolution context and perform minimal operations using the installed APIs. Run the TSS signing tests; merely finding `.node` files does not prove ABI compatibility.
+- [x] `./node_modules/.bin/bitcore-cli --help` exits zero after the first install. Its target is inside this checkout; no absolute path from another checkout is embedded.
+- [x] Loading mnemonic, P2P, TSS, and crypto-wallet-core together produces no duplicate primitive-library-instance error; native Node module identity matches the intended local libraries. Treat that native-load identity check as distinct from resolver-path identity: also confirm that each of these primitive libraries is reached through one intended workspace-resolution path across the tested consumers, not merely one canonical real path after symlink dereferencing. The previous LavaMoat failure occurred at the resolver-path layer even though Node's native loader had already canonicalized identity correctly, so a passing native-load check alone does not establish the resolver-path invariant this task requires.
+- [x] Both installs leave root/excluded-project lock hashes unchanged. A second ordinary `npm ci` in the same disposable checkout also succeeds.
+- [x] A temporary incompatible workspace manifest change causes `npm ci` or the contract verifier to fail, rather than silently selecting an unintended registry package. Restore the fixture after the check.
+
+Status: **verified against the real repository on both the pinned Node 22
+Linux environment (a real `node:22.16.0-bookworm` container; `linux/arm64`,
+not CI's `x86_64` -- the one gap this session could not close, stated
+plainly rather than smoothed over) and the supported macOS developer
+platform.** A real, previously-unknown defect was found strictly by
+actually running the pinned Linux environment for the first time (not by
+reasoning about it): npm's SIGINT/SIGTERM forwarding to a running compile
+script silently fails on Debian/Ubuntu's `/bin/sh` (dash), permanently
+orphaning the process and hanging anything that waits on it -- a real,
+permanent platform fact (confirmed with a minimal, direct `sh -c`
+reproduction), not a sandbox artifact. Root-caused, fixed in
+`scripts/workspaces/compile.cjs`, and reverified stable across repeated
+runs on both platforms (commit `c08a217f0611a047985a92515cfdb6fb6d40f462`,
+logged in `bitcore-decision-log.json`). Full account, evidence, and logs in
+[evidence.md](../../artifacts/workspaces/task2.2/evidence.md). The optional
+LavaMoat topology probe below was not run; all required gates above are
+green without it.
 
 #### Optional / informational LavaMoat topology probe
 
