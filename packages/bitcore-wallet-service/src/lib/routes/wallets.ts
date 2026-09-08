@@ -97,7 +97,7 @@ export function registerWalletRoutes(router: express.Router, context: RouteConte
 
   router.get('/v3/wallets/', (req, res) => {
     getServerWithAuth(req, res, server => {
-      checkNumberFormat(req.query.numberFormat, res);
+      checkNumberFormat(req.query.numberFormat as string, res);
       const opts = {
         includeExtendedInfo: false,
         twoStep: false,
@@ -124,7 +124,7 @@ export function registerWalletRoutes(router: express.Router, context: RouteConte
     const twoStep = req.query.twoStep == '1';
     const silentFailure = req.query.silentFailure == '1';
     const includeServerMessages = req.query.serverMessageArray == '1';
-    const numberFormat = req.query.numberFormat;
+    const numberFormat = req.query.numberFormat as string;
     checkNumberFormat(numberFormat, res);
 
     const buildOpts = (request, copayerId) => {
@@ -254,7 +254,7 @@ export function registerWalletRoutes(router: express.Router, context: RouteConte
       server => {
         const opts = {
           identifier: req.params['identifier'],
-          walletCheck: ['1', 'true'].includes(req.query['walletCheck'])
+          walletCheck: ['1', 'true'].includes(req.query['walletCheck'] as string)
         };
 
         server.getWalletFromIdentifier(opts, (err, wallet) => {
@@ -297,7 +297,7 @@ export function registerWalletRoutes(router: express.Router, context: RouteConte
       try {
         const opts = { account: 0 };
         if (req.query.account) {
-          opts.account = parseInt(req.query.account);
+          opts.account = parseInt(req.query.account as string);
         }
         const flags = await server.getFlags(opts);
         res.json(flags);

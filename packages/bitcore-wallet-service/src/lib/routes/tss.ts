@@ -28,7 +28,7 @@ export class TssRouter {
         const id = req.params.id;
         // version was not given by client until 1.1, so fallback to 1.0
         const { message, n, password, version = 1.0, timeLimit } = req.body;
-        const copayerId = req.headers['x-identity'];
+        const copayerId = req.headers['x-identity'] as string;
         await TssKeyGen.processMessage({ id, message, n, password, copayerId, version, timeLimit });
         return res.send();
       } catch (err) {
@@ -39,7 +39,7 @@ export class TssRouter {
     router.get('/v1/tss/keygen/:id/:round', authTssRequest(), async function(req, res) {
       try {
         const { id, round } = req.params as { [key: string]: string };
-        const copayerId = req.headers['x-identity'];
+        const copayerId = req.headers['x-identity'] as string;
         if (round === 'secret') {
           const secret = await TssKeyGen.getBwsJoinSecret({ id, copayerId });
           return res.json({ secret });
@@ -54,7 +54,7 @@ export class TssRouter {
     router.post('/v1/tss/keygen/:id/store', authTssRequest(), async function(req, res) {
       try {
         const id = req.params.id;
-        const copayerId = req.headers['x-identity'];
+        const copayerId = req.headers['x-identity'] as string;
         const message = req.body;
 
         await TssKeyGen.storeKey({ id, message, copayerId });
@@ -68,7 +68,7 @@ export class TssRouter {
       try {
         const id = req.params.id;
         const { secret } = req.body;
-        const copayerId = req.headers['x-identity'];
+        const copayerId = req.headers['x-identity'] as string;
         await TssKeyGen.storeBwsJoinSecret({ id, secret, copayerId });
         return res.send();
       } catch (err) {
@@ -79,7 +79,7 @@ export class TssRouter {
     router.get('/v1/tss/keygen/:id/secret', authTssRequest(), async function(req, res) {
       try {
         const id = req.params.id;
-        const copayerId = req.headers['x-identity'];
+        const copayerId = req.headers['x-identity'] as string;
         const secret = await TssKeyGen.getBwsJoinSecret({ id, copayerId });
         return res.json({ secret });
       } catch (err) {
@@ -95,7 +95,7 @@ export class TssRouter {
         const id = req.params.id;
         // version was not given by client until 1.1, so fallback to 1.0
         const { message, m, version = 1.0, timeLimit } = req.body;
-        const copayerId = req.headers['x-identity'];
+        const copayerId = req.headers['x-identity'] as string;
         await TssSign.processMessage({ id, message, m, copayerId, version, timeLimit });
         return res.send();
       } catch (err) {
@@ -106,7 +106,7 @@ export class TssRouter {
     router.get('/v1/tss/sign/:id/:round', authTssRequest(), async function(req, res) {
       try {
         const { id, round } = req.params as { [key: string]: string };
-        const copayerId = req.headers['x-identity'];
+        const copayerId = req.headers['x-identity'] as string;
         const { messages, signature, participants } = await TssSign.getMessagesForParty({ id, round: parseInt(round), copayerId });
         return res.json({ messages, signature, participants });
       } catch (err) {
