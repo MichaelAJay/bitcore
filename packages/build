@@ -1,16 +1,8 @@
 #!/bin/sh
 
-# Delegates to the canonical sequential compile runner
-# (scripts/workspaces/compile.cjs), the single source of truth for build
-# order (see .idea/npm-workspaces/bitcore-migration-plan.md Task 1.3/2.1).
-# This used to be its own hardcoded cd-and-compile loop over a stale,
-# incomplete, unscoped module list (missing bitcore-logging, the CLI, and
-# node; left over from before packages were scoped under @bitpay-labs/) that
-# only worked when invoked from inside packages/ and, because of a shell
-# subtlety in `cmd || (echo ERROR && exit)`, never actually stopped the loop
-# on a failed compile: `exit` inside that subshell only exited the subshell,
-# not this script. Resolve the repository root from this script's own
-# location, rather than the caller's cwd, so it can be run from anywhere.
+# Delegates to the canonical compile runner (scripts/workspaces/compile.cjs)
+# so build order lives in one place. Resolves the repo root from this
+# script's own location, not the caller's cwd, so it works from any directory.
 set -e
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ROOT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
