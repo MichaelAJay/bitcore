@@ -19,11 +19,105 @@
 // workspaces (not yet done -- see Task 2.1). Only `main()` below binds the
 // real COMPILE_ORDER and this repository's root.
 
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const path = require('path');
 const { EXPECTED_WORKSPACES, COMPILE_ORDER } = require('./lib/constants.cjs');
 const { checkCompileMembership } = require('./lib/manifests.cjs');
 const { loadWorkspaceManifests } = require('./lib/util.cjs');
+
+// Lists the live direct child pids of `pid` via `pgrep -P`, available on both
+// this project's supported platforms (macOS and Debian/Ubuntu Linux). Exit
+// code 1 from pgrep means no matches, not an error.
+function listChildPids(pid) {
+  try {
+    const out = execFileSync('pgrep', ['-P', String(pid)], { encoding: 'utf8' });
+    return out
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map(Number);
+  } catch (err) {
+    if (err.status === 1) return [];
+    throw err;
+  }
+}
+
+// Signals only the *leaf* live descendants of `pid` (processes with no
+// children of their own at the moment of the walk) -- deliberately not every
+// descendant. Needed alongside signaling npm itself directly: confirmed
+// empirically (see artifacts/workspaces/task2.2/evidence.md) that npm's own
+// lifecycle code already relays a signal it receives to its immediate child
+// correctly on both platforms, but that immediate child is
+// `/bin/sh -c '<script>'` (npm always runs a package's own script through a
+// shell, since a script string can contain arbitrary shell syntax it can't
+// safely skip that layer for), and this project's two supported platforms
+// disagree about what that shell layer even is: macOS's `/bin/sh` execve-
+// replaces itself for a simple trailing command like `node compile.js`, so
+// there is no distinct shell process left to relay through -- but
+// Debian/Ubuntu's `/bin/sh` (dash, the base of every `node:*-bookworm` image
+// this repo uses) forks a real child instead, and dash does not relay a
+// signal it receives on to that child; it just dies immediately on its own,
+// orphaning the still-running compile step and hanging anything waiting on
+// it. Signaling the leaf directly reaches that orphan-prone grandchild
+// regardless of which of those the shell layer turned out to be -- but only
+// the leaf: signaling dash *itself* directly (in addition to its child)
+// reintroduces the identical problem one level up, since a directly-
+// signaled dash also just dies immediately, before it can observe its own
+// child's real exit and propagate it -- which is exactly the npm-visible
+// signal/exit-code that the runner and its tests read. Leaving every
+// intermediate shell unsignaled lets each one exit normally once its own
+// child does, so npm's own reported exit reflects the real leaf's outcome
+// instead of a shell that was killed out from under it.
+//
+// Returns the pids it actually signaled, so the caller can wait for their
+// real exit directly: npm's own reported exit (see runWorkspaceCompile) only
+// reflects its immediate child (the intermediate shell, left deliberately
+// unsignaled above), not these leaves, so on a platform where that shell is
+// a distinct, real process, npm can finish observing *its* child well
+// before a leaf signaled here has actually finished exiting.
+function killDescendants(pid, signal) {
+  const signaled = [];
+  for (const childPid of listChildPids(pid)) {
+    const grandchildPids = listChildPids(childPid);
+    if (grandchildPids.length === 0) {
+      try {
+        process.kill(childPid, signal);
+        signaled.push(childPid);
+      } catch (err) {
+        if (err.code !== 'ESRCH') throw err;
+      }
+    } else {
+      signaled.push(...killDescendants(childPid, signal));
+    }
+  }
+  return signaled;
+}
+
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false; // ESRCH: no process with that pid remains.
+  }
+}
+
+// Polls until `pid` is gone. Used only for the leaf pids killDescendants
+// itself signaled, whose real exit npm's own `exit` event does not reflect
+// (see killDescendants above) -- there is no `exit` event to await for a
+// process this runner did not spawn directly, so polling is the option
+// left, bounded generously since these are our own signaled leaves, not
+// arbitrary external processes.
+function waitForExit(pid, { pollMs = 20, timeoutMs = 10000 } = {}) {
+  return new Promise((resolve) => {
+    const deadline = Date.now() + timeoutMs;
+    const check = () => {
+      if (!isAlive(pid) || Date.now() > deadline) return resolve();
+      setTimeout(check, pollMs);
+    };
+    check();
+  });
+}
 
 // Confirms exactly COMPILE_ORDER's packages declare a `compile` script,
 // scanning EXPECTED_WORKSPACES's package.json files directly on disk. This
@@ -61,9 +155,16 @@ function runWorkspaceCompile(name, { root, npmCommand = 'npm', spawnImpl = spawn
     // reflects why the runner is stopping, not what the child's exit looked
     // like.
     let interruptedBy = null;
+    let signaledLeafPids = [];
     const forward = (signal) => {
       interruptedBy = interruptedBy || signal;
-      if (!child.killed) child.kill(signal);
+      if (child.killed || !child.pid) return;
+      // Signal npm's actual OS descendants directly, in addition to npm
+      // itself below: see killDescendants above for why the direct signal
+      // to npm alone is not sufficient on this project's Debian/Ubuntu-based
+      // Linux targets.
+      signaledLeafPids = signaledLeafPids.concat(killDescendants(child.pid, signal));
+      child.kill(signal);
     };
     process.on('SIGINT', forward);
     process.on('SIGTERM', forward);
@@ -78,7 +179,16 @@ function runWorkspaceCompile(name, { root, npmCommand = 'npm', spawnImpl = spawn
     });
     child.on('exit', (code, signal) => {
       stopForwarding();
-      resolve({ name, code, signal, interruptedBy });
+      // npm's own `exit` reflects only its immediate child (see
+      // killDescendants), so on a platform where that child is a real,
+      // distinct shell (Debian/Ubuntu's dash), npm can report done before a
+      // leaf this runner itself signaled has actually finished exiting.
+      // Waiting here restores this function's own documented promise --
+      // never report done before the child has actually terminated -- for
+      // that leaf too, not only for npm.
+      Promise.all(signaledLeafPids.map((pid) => waitForExit(pid))).then(() => {
+        resolve({ name, code, signal, interruptedBy });
+      });
     });
   });
 }

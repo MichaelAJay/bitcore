@@ -119,10 +119,27 @@ test('runWorkspaceCompile forwards a received SIGTERM to the real npm child and 
   process.emit('SIGTERM');
 
   const result = await compilePromise;
-  // The child handled SIGTERM itself and exited 0 -- npm's own child
-  // process then also exits 0, since it was not forcibly killed. What this
-  // proves is the propagation and wait, not a particular exit classification.
-  assert.equal(result.code, 0);
+  // The real leaf script handled SIGTERM itself and exited 0 -- proven
+  // directly by the marker assertion below, which is what this test is
+  // actually for. What npm itself reports for *its own* exit is a separate,
+  // platform-dependent fact this project's tooling cannot control from
+  // outside: confirmed empirically (see artifacts/workspaces/task2.2/
+  // evidence.md), npm always runs a package's own script through
+  // `/bin/sh -c '<script>'`, and macOS's `/bin/sh` execve-replaces itself
+  // for a simple trailing command like `node compile.js` -- so there is no
+  // distinct shell process, npm's own child IS the leaf, and npm reports
+  // its clean exit 0 directly -- but Debian/Ubuntu's `/bin/sh` (dash, the
+  // base of every `node:*-bookworm` image this repo uses) forks a real,
+  // distinct child instead, which dies immediately once npm's own signal
+  // relay reaches it (dash has no trap of its own to observe and reflect
+  // its own child's real exit first), so npm reports that shell's own
+  // signal death instead. Both are legitimate; the leaf either way is
+  // confirmed by the marker file below, not by which of these two shapes
+  // npm happened to report.
+  assert.ok(
+    result.code === 0 || (result.code === null && result.signal === 'SIGTERM'),
+    `unexpected npm-reported exit for the runWorkspaceCompile promise: code=${result.code} signal=${result.signal}`
+  );
   assert.equal(fs.existsSync(markerPath), true, 'the forwarded SIGTERM must have reached the real npm child');
   assert.equal(fs.readFileSync(markerPath, 'utf8'), 'received');
 });
