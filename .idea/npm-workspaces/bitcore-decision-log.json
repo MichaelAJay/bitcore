@@ -190,6 +190,26 @@
           "reasoning": "Same disposition as wallet-service's Makefile: unreferenced anywhere, and its `all`/`clean` targets built a browserify bundle (bitcore-wallet-client.js) that nothing in the repository imports or serves (grepped for the filename across the package, no hits) -- a dead artifact of a bundling step this package's real scripts no longer perform."
         }
       ]
+    },
+    {
+      "phase": 3,
+      "task": "3.3",
+      "planSection": "Phase 3 -- Preserve developer commands and CI / Task 3.3 -- Update CircleCI installation, caching, and test inventory",
+      "commit": "20b3e40a80a7d89b73ebe3ed00484c06558b16e5",
+      "date": "2026-09-08",
+      "summary": "Task 2.1's own evidence claimed a root .npmrc (engine-strict=false) was added, but no commit on this branch ever created it (git log --all -- .npmrc shows only a pre-migration, unrelated 'mv .npmrc to bitcore-tss'). This surfaced while designing this task's CI cache key, which needs to checksum an install-affecting .npmrc per the plan's target design item 4 and acceptance-spec Sec3. Added it directly rather than leaving the target-design requirement unmet, since it is a small, additive, zero-behavior-change fix (matches npm's own engine-strict default) with no test surface.",
+      "changes": [
+        {
+          "file": ".npmrc",
+          "change": "New file: engine-strict=false.",
+          "reasoning": "socks5-client@0.3.6 (used by all three P2P packages) declares engines.node: 0.x, so npm's graph-wide strict engine check would reject the existing dependency graph outright. Real engine compatibility is instead enforced after install by scripts/workspaces/verify.cjs (engines mode), wired into root postinstall, which allows only that one documented exception and fails on every other mismatch. Confirmed the addition changes nothing observable (npm config get engine-strict is false both before and after, since that already matches npm's own default) and reverified check-runtime.cjs/verify.cjs manifests/engines/lock all still pass."
+        },
+        {
+          "file": ".circleci/config.yml",
+          "change": "Rewrote installation, caching, and test-job inventory: Node/npm pinned to 22.16.0/10.9.2 with npm force-installed explicitly; removed create_concatenated_package_lock and all combined-package-lock.txt references; replaced restored-node_modules caching with npm-download-cache (~/.npm) keyed on OS/arch, the exact Node/npm pair, and package-lock.json/.npmrc checksums; added explicit check-runtime.cjs preflight before npm ci and each job's npm run compile; added verify.cjs manifests/lock/engines/links/artifacts, npm ls, and the orchestration test suite to the build job; removed the disabled build-crypto-rpc job and its now-unused executor; added bitcore-p2p-cash/bitcore-p2p-doge jobs; removed use_python2/pyenv-2.7 setup.",
+          "reasoning": "Each change maps directly to Task 3.3's Work list. The npm-download-cache redesign follows the plan's explicit instruction ('cache npm's download cache rather than restored installed trees... always run npm ci whether the cache hits or misses'): the old cache restored ~20 explicit per-package node_modules paths behind an already-disabled restore step, which is both redundant (persist_to_workspace already carries the full post-install tree to every test job) and the wrong target once there is one hoisted root install. The Python 2 removal is backed by Task 2.2's real node:22.16.0-bookworm Linux cold-install log (artifacts/workspaces/task2.2/linux-final-full-cold-sequence.log), which shows every native module's node-gyp compile already resolving Python 3.11.2 with zero Python 2 use -- a real measurement of this exact dependency graph on Node 22, not an assumption. build-crypto-rpc was already commented out of the workflow (dead) and only persisted the RPC package directory alone, insufficient once its dependencies live at the workspace root; the plan explicitly prefers removing this disabled path over repairing it, since the common build job already supplies every active test job including crypto-rpc's own. The p2p-cash/p2p-doge additions were verified as an exact 17-entry match against package.json's test:* scripts via a programmatic diff, not eyeballed. Config validity (including the absence of any remaining Lerna/combined-package-lock reference in the fully expanded config) was confirmed with the real circleci CLI (circleci config validate / circleci config process), installed for this task via Homebrew. crypto-rpc's own Docker-based test path is left unvalidated end-to-end, per the plan's own dependency line ('validate Docker test jobs after Phase 4') -- its docker-compose.yml build context is still package-local, which Task 4.2 is scoped to fix."
+        }
+      ]
     }
   ]
 }
