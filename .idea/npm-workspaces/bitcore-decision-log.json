@@ -1,0 +1,145 @@
+{
+  "description": "Running log of the reasoning behind non-obvious dependency/config decisions made while executing bitcore-migration-plan.md. Each entry is one commit and ties it to the plan phase/task it was made under, so a later reader can see why a change was made, not just what changed. Append new entries as new commits land; do not edit past entries except to fix a factual error.",
+  "entries": [
+    {
+      "phase": 2,
+      "task": "2.1",
+      "planSection": "Phase 2 -- Cut over installation and lock ownership / Task 2.1 -- Introduce npm workspaces and generate the root lock",
+      "commit": "a1499587539a92233eef8c3f6d582c7228383bee",
+      "date": "2026-09-08",
+      "summary": "Real npm-workspace hoisting is permanent (not a transitional cutover artifact) and makes bitcore-node's pinned @types/sinon ambiently reachable from every sibling workspace. bitcore-wallet-service, bitcore-wallet-client, and bitcore-cli never had a reachable @types/sinon under Lerna's per-package isolation, and their test suites grew real reliance on that: ad hoc mock objects and legacy Sinon API usage (e.g. wrappedMethod) that don't satisfy any real @types/sinon version, whether bitcore-node's outdated 4.3.3 pin or bitcore-cli's own much newer sinon@^21.0.0 (which doesn't ship its own bundled types either). Follow-up to retire this by modernizing each package's test doubles is tracked in .idea/npm-workspaces/follow-up/bitcore-sinon-typing-debt.md.",
+      "changes": [
+        {
+          "file": "packages/bitcore-wallet-service/tsconfig.json",
+          "change": "Added a `paths` entry redirecting the `sinon` module specifier to a new local ./types/sinon-shim.d.ts.",
+          "reasoning": "Restores this package's tests to the untyped `sinon` behavior they were always actually written against (see the new shim file's own reasoning), rather than type-checking against bitcore-node's ambiently-hoisted @types/sinon@4.3.3, which this package's mocks don't satisfy."
+        },
+        {
+          "file": "packages/bitcore-wallet-service/types/sinon-shim.d.ts",
+          "change": "New file: `declare const sinon: any; export = sinon;`",
+          "reasoning": "The real `sinon` package this shim's import specifier is redirected away from is unaffected at runtime -- only this package's own TypeScript type-checking of the `sinon` import changes, back to the implicit `any` it always had under Lerna's isolated installs."
+        },
+        {
+          "file": "packages/bitcore-wallet-client/tsconfig.json",
+          "change": "Added a `paths` entry redirecting the `sinon` module specifier to a new local ./types/sinon-shim.d.ts.",
+          "reasoning": "Same reasoning as bitcore-wallet-service's identical change: restores this package's tests to their always-implicit-any `sinon` typing."
+        },
+        {
+          "file": "packages/bitcore-wallet-client/types/sinon-shim.d.ts",
+          "change": "New file: `declare const sinon: any; export = sinon;`",
+          "reasoning": "Same shim pattern as bitcore-wallet-service's."
+        },
+        {
+          "file": "packages/bitcore-cli/tsconfig.json",
+          "change": "Added a `paths` object (this package had none before) with a `sinon` entry redirecting to a new local ./types/sinon-shim.d.ts.",
+          "reasoning": "Same underlying gap, with an added wrinkle: bitcore-cli's own sinon@^21.0.0 doesn't ship its own bundled TypeScript types, so without this shim it falls back to bitcore-node's ancient @types/sinon@4.3.3 -- a version mismatch far larger than in the other two packages (Sinon 4 vs Sinon 21), rejecting even ordinary usage like `sinon.stub(API.prototype, 'constructor')`."
+        },
+        {
+          "file": "packages/bitcore-cli/types/sinon-shim.d.ts",
+          "change": "New file: `declare const sinon: any; export = sinon;`",
+          "reasoning": "Same shim pattern as the other two packages'."
+        }
+      ]
+    },
+    {
+      "phase": 2,
+      "task": "2.1",
+      "planSection": "Phase 2 -- Cut over installation and lock ownership / Task 2.1 -- Introduce npm workspaces and generate the root lock",
+      "commit": "b765d7bada7fbba02d068984fb1782ac7a267df2",
+      "date": "2026-09-08",
+      "summary": "Real npm-workspace hoisting (proven for the first time against this repo's actual dependency graph, not a synthetic fixture -- see artifacts/workspaces/task2.1/evidence.md) exposed three packages that had always implicitly relied on @types/* resolution Lerna's per-package-isolated installs happened to provide for them, or that hoisting now routes to the wrong sibling's pinned version. Fixed each by declaring the package's own correct devDependency instead of continuing to depend on which sibling wins the hoist.",
+      "changes": [
+        {
+          "file": "packages/bitcore-node/package.json",
+          "change": "Added devDependency @types/secp256k1@^4.0.7.",
+          "reasoning": "bitcore-node's src/utils/auth.ts calls secp256k1.ecdsaVerify(...), a real API on its installed secp256k1@4.0.3, but the package never declared its own @types/secp256k1. Under Lerna's isolated installs this was implicit `any` (tsconfig.json sets noImplicitAny: false) and the gap was invisible. Under real hoisting it instead inherits bitcore-client's exact @types/secp256k1@3.5.0 pin, which lacks ecdsaSign/ecdsaVerify -- a real tsc failure. ^4.0.7 matches bitcore-wallet-service's already-established fix for the identical gap (see below) and the installed secp256k1@4.0.3 runtime version."
+        },
+        {
+          "file": "packages/bitcore-wallet-service/package.json",
+          "change": "Added @types/express@^4.17.21, @types/request-promise-native@^1.0.15, and @types/secp256k1@^4.0.7. Re-pinned @types/node from \"^22.10.10\" to exact \"22.19.15\" and @types/request from \"^2.48.1\" to exact \"2.48.13\".",
+          "reasoning": "Two different problems, both only visible under real hoisting. (1) Missing declarations: this package directly uses express, request-promise-native, and (transitively, via its own blockchainexplorers/v8.ts) secp256k1, but only ever declared @types/request for the group -- the other three were always implicit `any` under Lerna. Real hoisting makes some sibling's own pin ambiently reachable instead (bitcore-node's @types/express@4.17.21, bitcore-client's @types/request-promise-native, bitcore-client's older @types/secp256k1@3.5.0), which happened to work for @types/express but not for the other two, so all three are now declared directly. (2) Version reversion: @types/node and @types/request both used caret ranges here, and under Lerna's isolated installs each resolved independently to the newest matching patch at lock-generation time (22.19.15 and 2.48.13, confirmed from this package's pre-migration package-lock.json, git history). Under real hoisting, two *other* packages (bitcore-client, bitcore-node) each pin an older *exact* version of the same two libraries, and npm's single shared hoisted copy ends up being one of those older exact pins instead of the newest range match -- and both older versions have a real typing difference this package's code hits (a header-value indexing difference in @types/node@22.13.1 vs 22.19.15; a `Cannot use namespace as a type` regression specific to @types/request@2.48.1 vs 2.48.13). Re-pinning this package's own exact versions forces npm to nest its own correctly-versioned copies rather than sharing whichever sibling's pin wins the hoist."
+        },
+        {
+          "file": "packages/crypto-rpc/package.json",
+          "change": "Reverted the @solana/kit devDependency from \"2.3.0\" back to \"2.1.0\".",
+          "reasoning": "crypto-wallet-core has pinned @solana/kit to an exact 2.1.0 since a Dec 2025 commit ('crypto-rpc to use CWC dependencies', Kenny Joseph) specifically so that crypto-rpc would share its exact installed copy rather than get its own: @solana/kit exports a nominally-branded Address type, so two distinct-but-semver-compatible copies of the package are not type-compatible with each other. A same-day-as-this-fix commit ('fix crypto-rpc deps') had added @solana/kit as a new devDependency of crypto-rpc, but at 2.3.0 -- diverging from crypto-wallet-core's pin (the accompanying @solana-program/* versions added in that same commit did correctly match crypto-wallet-core's pins; only @solana/kit itself didn't). Under real hoisting this produced two separate installed copies of @solana/kit (and its nested @solana/addresses), and TypeScript's nominal branding broke crypto-wallet-core's own tsc build across its sol/spl transaction code with a cascade of Address-type-mismatch errors. Reverting to 2.1.0 restores the single shared instance Kenny's commit established; confirmed via the regenerated lock resolving to one root-hoisted @solana/kit@2.1.0 with no nested copies."
+        }
+      ]
+    },
+    {
+      "phase": 2,
+      "task": "2.1",
+      "planSection": "Phase 2 -- Cut over installation and lock ownership / Task 2.1 -- Introduce npm workspaces and generate the root lock",
+      "commit": "47bde98701b23379f5530614bd48b0582af5760b",
+      "date": "2026-09-08",
+      "summary": "bitcore-wallet-service's route/auth code reads several properties off Express's `Request` object (`copayer`, `session`, `walletId`, `copayerId`, `isSupportStaff`, `redirectedUrl`) that middleware genuinely attaches at runtime, but that Express's own types have no way to know about. Under Lerna's isolated installs this package never had a reachable @types/express (only bitcore-node declares it), so every one of these accesses type-checked as implicit `any` and the gap was invisible. Real hoisting makes bitcore-node's @types/express ambiently reachable here too, so the real Request type applies and every access to an undeclared property becomes a real tsc error.",
+      "changes": [
+        {
+          "file": "packages/bitcore-wallet-service/src/types/expressapp.d.ts",
+          "change": "Added a `declare global { namespace Express { interface Request { ... } } }` block declaring the six properties, typed against where each is actually assigned (context.ts, walletdata.ts, authRequest.ts, authTssRequest.ts) -- e.g. `copayer?: Copayer` because `authRequest.ts` assigns the real return value of its own `withSession`/`withSignature` helpers (`Promise<Copayer>`) to `req.copayer`.",
+          "reasoning": "This is TypeScript declaration merging, not an override: @types/express-serve-static-core itself declares `interface Request {}` inside the exact same `declare global { namespace Express { ... } }` shape, deliberately empty so downstream code can merge more members into it, and its own exported `express.Request` type is literally defined as `interface Request<...> extends http.IncomingMessage, Express.Request` -- i.e. it already extends this same global interface. Adding properties here does not replace or narrow Express's Request type; it adds six more optional properties to the one merged interface that express.Request already extends, which is the standard, Express-documented mechanism for this (the alternative -- casting `req as any` at every one of the ~10 call sites that read these properties -- would be both more code and would suppress real checking of everything else on `req` at each of those sites, not just the added properties). The declaration lives in `declare global`, so it is visible everywhere in this package's own single tsc compilation (which is the only place it needs to be); each package has its own separate tsc invocation under this monorepo's real per-package compile step, so this does not leak into any other workspace's compilation, and the file is under `src/types/` (not the package's public entry point), so nothing external imports it either."
+        }
+      ]
+    },
+    {
+      "phase": 2,
+      "task": "2.1",
+      "planSection": "Phase 2 -- Cut over installation and lock ownership / Task 2.1 -- Introduce npm workspaces and generate the root lock",
+      "commit": "3d578a29ce58eac48eacaaf29bf7c1bfe0228cda",
+      "date": "2026-09-08",
+      "summary": "Each change in this commit fixes a real tsc failure directly reproduced under a real `npm ci` against this repo's actual hoisted install (not a synthetic fixture or a guess) -- confirmed by running the real per-package compile with the change removed and seeing the exact error return. Two categories: modern @types/express is now reachable (and precise) for the first time in bitcore-wallet-service, so req.query/req.headers's real, wider types (string | ParsedQs | array; string | string[]) are checked at real call sites for the first time; and an unrelated transitive @types/superagent (a real dependency of bitcore-tss's @bitgo/sdk-lib-mpc) is now ambiently reachable in bitcore-wallet-client, where two fields' test doubles never implemented the real SuperAgentRequest shape.",
+      "changes": [
+        {
+          "file": "packages/bitcore-wallet-client/src/lib/paypro.ts",
+          "change": "`static r = superagent;` (inferred type) -> `static r: any = superagent;`",
+          "reasoning": "Real @types/superagent@4.1.15 (from bitcore-tss's @bitgo/sdk-lib-mpc dependency, not declared by this package or anything it directly depends on) is now ambiently reachable, so this field's type is no longer implicit `any` -- but test code assigns lightweight fakes (e.g. `{ get: _url => ({ set, query, end }) }`) to it that don't implement the real SuperAgentRequest interface (cookies, method, url, abort, and dozens more). Per Task 2.1's principle (fix tests, don't loosen production types, unless the fix is test-code surgery out of this task's scope), this is logged as debt in the sinon-typing-debt follow-up doc rather than fixed by rewriting the mocks now."
+        },
+        {
+          "file": "packages/bitcore-wallet-client/src/lib/payproV2.ts",
+          "change": "`static request = superagent;` (inferred type) -> `static request: any = superagent;`",
+          "reasoning": "Identical to paypro.ts's change above -- same field pattern, same fake-request test doubles, same reachable-but-mismatched @types/superagent."
+        },
+        {
+          "file": "packages/bitcore-wallet-service/src/lib/routes/transactions.ts",
+          "change": "`checkNumberFormat(req.query.numberFormat, res)` -> `checkNumberFormat(req.query.numberFormat as string, res)` at all 5 call sites.",
+          "reasoning": "`checkNumberFormat` is typed `(numberFormat: string | undefined, res: express.Response) => void`. Modern @types/express types `req.query.x` as `string | ParsedQs | (string | ParsedQs)[]`, which was never checked here before (this package had no reachable @types/express under Lerna). In practice this query parameter is always a plain string or absent (Express's default parser only produces ParsedQs/array shapes for bracket/array query syntax, e.g. `?numberFormat[]=x`, which nothing sends here); the assertion reflects that real-world constraint rather than adding runtime validation for it."
+        },
+        {
+          "file": "packages/bitcore-wallet-service/src/lib/routes/tss.ts",
+          "change": "`const copayerId = req.headers['x-identity'];` -> `... as string;` at all 7 call sites.",
+          "reasoning": "@types/node types header values as `string | string[] | undefined` in general (some headers, like set-cookie, really can repeat as an array), now checked here for the first time. In practice a plain custom header like `x-identity` is always folded into a single string by Node's own HTTP parser when a client sends it more than once -- it is not one of the small set of headers Node treats as array-valued -- so this reflects that real constraint."
+        },
+        {
+          "file": "packages/bitcore-wallet-service/src/lib/routes/walletdata.ts",
+          "change": "`router.handle(req, res)` -> `(router as any).handle(req, res)`; `Array.isArray(req.query.addresses) ? req.query.addresses : req.query.addresses.split(',')` -> `Array.isArray(req.query.addresses) ? req.query.addresses.map(String) : String(req.query.addresses).split(',')`.",
+          "reasoning": "`Router.handle` is a real Express method that re-dispatches a request through the same router without an HTTP round-trip; it exists at runtime but Express deliberately does not publish it in its own types, so some cast is required regardless of hoisting -- `any` was chosen since there is no more-precise typed alternative to reach for here (a local type intersection adding just `handle` with a hand-written signature was considered and rejected as not worth its own maintenance burden for one internal-API call). The `.split(',')` fix is unrelated and not an `any`/assertion at all: the prior code left the true (array) branch of the ternary typed as `(string | ParsedQs)[]`, not `string[]`, which is what `opts.addresses` requires; `.map(String)` makes both ternary branches produce real `string[]` values."
+        },
+        {
+          "file": "packages/bitcore-wallet-service/src/lib/routes/wallets.ts",
+          "change": "Four `req.query.x`/`req.query['x']` accesses (`numberFormat` x2, `walletCheck`, `account`) cast `as string` at their real call sites (`checkNumberFormat`, `['1','true'].includes(...)`, `parseInt(...)`).",
+          "reasoning": "Same category as transactions.ts above -- these are all single, non-repeated query parameters that are always plain strings in practice; the assertions reflect that, not runtime validation for the theoretical array/object case."
+        }
+      ]
+    },
+    {
+      "phase": 2,
+      "task": "2.1",
+      "planSection": "Phase 2 -- Cut over installation and lock ownership / Task 2.1 -- Introduce npm workspaces and generate the root lock",
+      "commit": "77b0f392160088b4ec5959a4533945436fa44889",
+      "date": "2026-09-08",
+      "summary": "Corrects the direction of an earlier fix in this same task. V8's `request` field was loosened to `any` to unblock compilation (real @types/request-promise-native became reachable and its precise type, `typeof request`, broke test mocks that only implement one method each). Per this project's rule that production types should stay accurate and test doubles should be the ones that adapt, reverted to the precise type and fixed the test mocks instead.",
+      "changes": [
+        {
+          "file": "packages/bitcore-wallet-service/src/lib/blockchainexplorers/v8.ts",
+          "change": "`request: any;` / `request?: any;` -> `request: typeof request;` / `request?: typeof request;`.",
+          "reasoning": "This is the exact fix the compiler itself suggested (\"Did you mean 'typeof request'?\") when the original code (`request: request;` -- a value used directly as a type, invalid TypeScript, silently accepted only because the whole module was implicit `any` before hoisting) first failed. No test files were ever deleted or had content removed to get here; the earlier `any` was reverted and this precise type substituted instead."
+        },
+        {
+          "file": "packages/bitcore-wallet-service/test/v8.test.ts",
+          "change": "Added `import * as request from 'request-promise-native';` (the identical import style v8.ts itself uses -- see below for why that specific style matters) and appended `as unknown as typeof request` to each of the 7 `const fakeRequest = { get: sinon.stub()... }` declarations.",
+          "reasoning": "Each `fakeRequest` is a deliberate minimal test double (only the one method that specific test actually exercises), not a real request-promise-native client, so it cannot structurally satisfy the real `RequestAPI` interface (dozens of methods: post, put, del, defaults, debug, ...) on its own -- `as unknown as X` is the standard, narrowly-scoped TypeScript idiom for asserting a deliberate partial substitute at its one injection point, as opposed to loosening the production field everything else depends on. One real pitfall hit and resolved here: the test's first attempt imported request-promise-native as a default import (`import type request from 'request-promise-native'`), which under this tsconfig's `esModuleInterop` resolves to a *different* type shape than v8.ts's own `import * as request from 'request-promise-native'` (namespace import) -- confirmed empirically by the resulting tsc error demanding an unrelated `default`-wrapped shape. Matching v8.ts's exact import style makes `typeof request` refer to the identical type in both files, which is what actually made the cast succeed."
+        }
+      ]
+    }
+  ]
+}
