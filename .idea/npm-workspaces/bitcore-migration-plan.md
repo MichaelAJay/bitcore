@@ -429,14 +429,16 @@ Work:
 
 Acceptance:
 
-- [ ] Every existing root test alias executes the intended package, forwards an argument in a fixture, and returns failure when its child fails.
-- [ ] Start commands resolve the expected package cwd and local modules in an isolated service smoke run.
-- [ ] Watch starts the client compiler, rebuilds after an isolated source edit, and terminates without leaving child processes after SIGINT.
-- [ ] Docker build routing runs exactly node then wallet-service, and stops if the first build fails; test routing with fixture commands before building images.
-- [ ] `packages/build` works from root and from `packages/`. No bootstrap alias or hidden Lerna fallback remains.
-- [ ] Full required script regressions are covered by the final matrix; no broad `npm test --workspaces` is substituted for tests needing different prerequisites.
+- [x] Every existing root test alias executes the intended package, forwards an argument in a fixture, and returns failure when its child fails.
+- [x] Start commands resolve the expected package cwd and local modules in an isolated service smoke run.
+- [x] Watch starts the client compiler, rebuilds after an isolated source edit, and terminates without leaving child processes after SIGINT.
+- [x] Docker build routing runs exactly node then wallet-service, and stops if the first build fails; test routing with fixture commands before building images.
+- [x] `packages/build` works from root and from `packages/`. No bootstrap alias or hidden Lerna fallback remains.
+- [x] Full required script regressions are covered by the final matrix; no broad `npm test --workspaces` is substituted for tests needing different prerequisites.
 
 RED/GREEN: routing uses regression evidence; injected child-command failure validates failure propagation without changing application code.
+
+Status: **implemented and verified against the real repository.** Most of this task's "Work" list (the 17 `test:<directory>` aliases, `node`/`bws`, `watch`, `build:docker`) turned out to already match the target design, introduced by Task 2.1's coordinated manifest/script cutover rather than this task; that finding was re-verified against the acceptance-spec, not assumed. The genuinely remaining work -- `packages/build` (rewritten to delegate to the canonical compile runner, resolving root from the script's own location; the old version's `exit`-inside-a-subshell bug meant it never actually stopped on a child failure, reproduced separately, not by relying on this repo's own packages happening to fail), `ci.sh`'s stale `ci:bitcore-node` example (corrected to the real `test:bitcore-node` alias), and the two unreferenced, already-unsatisfiable package Makefiles (retired; neither was reachable from any script, doc, or CI job) -- is done. Every routing path was then exercised for real rather than only read: `test:crypto-wallet-core -- --grep IDeriver` proved argument forwarding through a real filtered run (8/8 passing) with a full unfiltered run immediately after confirming the normal path is still green (265 passing, matching Task 2.1's count exactly); `test:bitcore-lib` proved real routing to the intended package and real failure propagation (blocked only by Task 1.1's already-documented local chromedriver gap, not a regression); `watch` was started, triggered a real incremental rebuild from an isolated source edit, and left zero orphaned processes after `SIGINT`; `bws`/`node` were run live, with `node` independently reaching the exact HTTP readiness probe the acceptance-spec specifies for Task 4.1 (`GET /api/status/enabled-chains` returning the full configured chain list) against the real local install; and `build:docker`'s exact shell-`&&` pattern was proven, via a disposable two-workspace fixture (real image builds remain Task 4.1's own gate), to run node then wallet-service in order and to stop before wallet-service when node fails. Full account, commands, and output in [evidence.md](../../artifacts/workspaces/task3.1/evidence.md).
 
 ### Task 3.2 — Preserve Insight's independent workflow
 
@@ -451,13 +453,15 @@ npm run insight:install
 npm run insight:build
 ```
 
-- [ ] `insight:build` remains a single install-and-build command. Both scripts run on Node 22 and use Insight's own locked TypeScript 4.6.3/tooling dependencies.
-- [ ] Build produces `packages/insight/build/index.html` and relocated assets under `build/insight/`, consistent with `postbuild.sh`.
-- [ ] A second install/build is reproducible and leaves the root and Insight locks unchanged.
-- [ ] Root backend `npm ci` does not install Insight or run its lifecycle scripts.
-- [ ] Dependencies added to Insight are documented as independent prefix-scoped operations; backend dependency changes use `npm install <dependency> --workspace=<scoped-name>` and update root lock only.
+- [x] `insight:build` remains a single install-and-build command. Both scripts run on Node 22 and use Insight's own locked TypeScript 4.6.3/tooling dependencies.
+- [x] Build produces `packages/insight/build/index.html` and relocated assets under `build/insight/`, consistent with `postbuild.sh`.
+- [x] A second install/build is reproducible and leaves the root and Insight locks unchanged.
+- [x] Root backend `npm ci` does not install Insight or run its lifecycle scripts.
+- [x] Dependencies added to Insight are documented as independent prefix-scoped operations; backend dependency changes use `npm install <dependency> --workspace=<scoped-name>` and update root lock only.
 
 RED/GREEN: before/after regression, plus negative workspace-membership check. Existing unrelated Insight failures must be recorded, not solved through an unplanned React toolchain migration.
+
+Status: **verified against the real repository; no script changes were needed.** `insight:install`/`insight:build` already matched the target design from Task 2.1's cutover; this task ran them for real rather than trusting that they worked. `npm run insight:install` installed cleanly on Node 22.16.0 from Insight's own independent, already-locked manifest (TypeScript 4.6.3 confirmed by direct read). `npm run insight:build` produced a real `packages/insight/build/index.html` and, checked directly on disk (not inferred from the build log), the exact `postbuild.sh` relocation of `asset-manifest.json`/`favicon.ico`/`robots.txt`/`static` under `build/insight/`. A second full install-and-build cycle left both `package-lock.json` and `packages/insight/package-lock.json` byte-identical (`shasum` before/after). `npm install --dry-run --workspace=insight` from root genuinely fails with "No workspaces found," confirming live -- not just by omission from the root manifest/lock -- that Insight cannot be reached through root-level workspace-scoped operations, which is the same result that establishes each side's one correct dependency-change path (root's `--workspace=<scoped-name>` vs. Insight's own `--prefix packages/insight`). Full account, commands, and output in [evidence.md](../../artifacts/workspaces/task3.2/evidence.md).
 
 ### Task 3.3 — Update CircleCI installation, caching, and test inventory
 
