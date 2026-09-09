@@ -41,6 +41,83 @@
 - [Bitpay/Bitpay App](https://github.com/bitpay/bitpay-app) - An easy-to-use, multiplatform, multisignature, secure wallet for bitcoin, ethereum, and more
 
 
+## Development
+
+The 18 backend packages under `packages/` (everything except `insight` and the
+three nested `benchmark/` fixtures) are npm workspaces of this root, installed
+and linked from one root install and one root lockfile. A package directory is
+no longer an independently locked checkout with its own `node_modules` or
+`package-lock.json` — you cannot `cd packages/bitcore-node && npm install`.
+This is a monorepo-development-only change: it does not affect ordinary
+consumers, who continue to `npm install @bitpay-labs/bitcore-node` (or any
+other published package) from the registry exactly as before.
+
+### Setup
+
+Use Node `22.x` and npm exactly `10.9.2` (pinned in root `package.json`'s
+`packageManager` field and enforced by a preflight check that runs before
+install). Then, from the repo root:
+
+```sh
+git clone https://github.com/bitpay/bitcore.git
+cd bitcore
+npm ci
+```
+
+`npm ci` installs and links all workspaces and then automatically compiles
+the packages that need a build step (`bitcore-logging`, `crypto-wallet-core`,
+`bitcore-wallet-service`, `bitcore-wallet-client`, `bitcore-client`,
+`bitcore-cli`, `bitcore-node`, in that order) via a root `postinstall` hook.
+To recompile later without reinstalling — after pulling changes or editing a
+package directly — run:
+
+```sh
+npm run compile
+```
+
+### Editing a workspace's dependencies
+
+Add or update a package's own dependency with `--workspace`, from the root:
+
+```sh
+npm install <dependency> --workspace=@bitpay-labs/<package-directory-name>
+```
+
+Internal cross-package dependencies (e.g. `bitcore-node` depending on
+`@bitpay-labs/crypto-wallet-core`) are declared as ordinary semver ranges in
+each package's `package.json`, the same as any published dependency — not
+`workspace:*` or `file:` references — and are linked locally by npm because
+the range matches the local version.
+
+### Running and testing
+
+- `npm run test:<package-directory-name>` runs one package's own tests (e.g.
+  `npm run test:bitcore-lib`, `npm run test:bitcore-wallet-service`). There is
+  no single aggregate root `test` script; run the specific package(s) you
+  changed, or see [`ci.sh`](ci.sh) below for the full matrix used in CI.
+- `npm run watch` runs bitcore-client's TypeScript watcher.
+- `npm run node` / `npm run bws` start bitcore-node / bitcore-wallet-service
+  directly from source.
+- `npm run build` builds the root Docker image; `npm run build:docker` builds
+  the bitcore-node and bitcore-wallet-service images.
+
+### Insight
+
+Insight (`packages/insight`) is deliberately kept out of the workspace graph
+and keeps its own independent lockfile and toolchain. Install and build it
+separately from the root:
+
+```sh
+npm run insight:install
+npm run insight:build
+```
+
+### Docker test workflows
+
+`./ci.sh` builds and runs the local Docker Compose test stack (application
+images plus the per-chain services tests need — MongoDB, Bitcoin, Geth, etc.).
+Run `./ci.sh --help` for usage, or see [`ci.sh`](ci.sh) directly.
+
 ## Versioning
 
 This repo follows the even-odd versioning convention. Major versions that are even (e.g. v8.x.x) are `stable` releases, odd are `beta` releases (e.g. v9.x.x). Beta versions may contain breaking changes or major feature additions that are still in testing.
