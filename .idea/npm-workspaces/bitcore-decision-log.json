@@ -491,6 +491,44 @@
           }
         }
       ]
+    },
+    {
+      "phase": 5,
+      "task": "5.2",
+      "planSection": "Phase 5 -- Validate distribution and complete removal / Task 5.2 -- Document commands and remove obsolete orchestration references",
+      "commit": "uncommitted (working tree changes as of base commit f02da9c3a2affade03530aaee91575b644958b1e; pending user review/commit)",
+      "date": "2026-09-09",
+      "summary": "Documentation-only task: no script or manifest behavior changed. The two real judgment calls were (1) how much of the monorepo development contract belongs in the root README versus each affected package's own README/Installation.md, and (2) what disposition each remaining pre-Lerna legacy artifact (Travis configs, nested benchmark projects, manual-browser Mocha fixtures) gets, since the plan requires an explicit one for each rather than silence.",
+      "changes": [
+        {
+          "file": "README.md",
+          "change": "Added a \"Development\" section covering exact Node/npm setup, root `npm ci`, automatic/explicit compile, editing a workspace package's own dependencies, scoped test/watch/start/build commands, Insight's separate install, and `./ci.sh` for local Docker tests.",
+          "reasoning": "Centralized the monorepo development contract in one place (root README) rather than duplicating it per package; the per-package README/Installation.md edits below link back to it instead of restating it."
+        },
+        {
+          "file": "CONTRIBUTING.md, packages/bitcore-node/README.md, packages/bitcore-wallet-service/README.md, packages/bitcore-wallet-service/Installation.md, packages/insight/README.md",
+          "change": "Replaced bare `npm install` monorepo-development instructions with root `npm ci` plus an explicit note that a backend package directory is no longer an independently locked checkout, while ordinary registry-consumer `npm install @bitpay-labs/...` usage is unaffected; Insight's README additionally documents its deliberate workspace exclusion and its own independent lockfile.",
+          "reasoning": "These were the only tracked docs found (via a repo-wide search for monorepo install/bootstrap prose) that described installing for local development with an install command that predates the workspaces cutover. crypto-rpc/README.md and Insight's registry-consumer install example were already correct as ordinary-consumer instructions and needed no change; CONTRIBUTING.md never had install prose before, so nothing Lerna-specific existed there to replace -- it now points at the root README section instead of duplicating it."
+        }
+      ],
+      "findings": [
+        {
+          "id": "manual-browser-fixtures-pre-existing-broken",
+          "title": "Five packages' manual-browser test/index.html fixtures reference asset paths that have never resolved in this repository",
+          "status": "recorded, not fixed -- pre-existing, outside this task's file scope",
+          "fixedBy": null,
+          "reproducibleFromMaster": true,
+          "summary": "bitcore-lib/-lib-cash's test/index.html reference `../node_modules/bitcore-build/node_modules/mocha/...` (a path that only matches if bitcore-build's own dependents declared `mocha` themselves, which they don't); bitcore-lib-doge/-lib-ltc reference a `litecore-build` package that has never existed in this repository at all (confirmed: `grep -rn litecore package.json packages/*/package.json` matches nothing); bitcore-mnemonic's references its own non-existent `node_modules/mocha`. None is reachable from any gulpfile, karma config, or script (confirmed: `grep -rn index.html packages/bitcore-build/*.js` matches nothing) -- they are dead, developer-opened-by-hand fixtures, and the `litecore-build` reference in particular predates this repository's current package scoping entirely, unrelated to Lerna or npm-workspaces.",
+          "reproduce": {
+            "prerequisites": "This branch, at or after this commit.",
+            "commands": [
+              "grep -n mocha packages/bitcore-lib-doge/test/index.html",
+              "grep -rn litecore package.json packages/*/package.json"
+            ],
+            "expectedResult": "The first shows a `litecore-build` path reference; the second returns no matches anywhere in the repository, confirming that package name was never real here."
+          }
+        }
+      ]
     }
   ]
 }

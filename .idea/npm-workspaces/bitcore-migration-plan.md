@@ -687,12 +687,14 @@ Files: root README/CONTRIBUTING, node and wallet-service installation docs, Insi
 
 Acceptance:
 
-- [ ] Instructions state exact Node/npm setup, root `npm ci`, automatic compilation, explicit recompile, scoped tests, watch/start/build commands, workspace dependency edits, Insight's separate install, and supported Docker test workflows.
-- [ ] Instructions explain that a backend package directory is no longer an independently locked checkout; registry consumers still install published packages normally.
-- [ ] Bootstrap and package-by-package install instructions are replaced wherever they describe monorepo development. Ordinary consumer `npm install @bitpay-labs/...` examples remain valid.
-- [ ] Tracked executable/configuration files contain no Lerna invocation, dependency, bootstrap implementation, obsolete lock concatenation, or active stale Docker path. Historical changelog prose may mention Lerna.
-- [ ] Legacy Travis, Makefile, benchmark and manual-browser workflows each have an explicit retain/update/retire disposition; nested benchmark locks are not accidentally deleted.
-- [ ] New documentation commands are executed in the disposable acceptance checkout. No unit tests are required for prose edits.
+- [x] Instructions state exact Node/npm setup, root `npm ci`, automatic compilation, explicit recompile, scoped tests, watch/start/build commands, workspace dependency edits, Insight's separate install, and supported Docker test workflows.
+- [x] Instructions explain that a backend package directory is no longer an independently locked checkout; registry consumers still install published packages normally.
+- [x] Bootstrap and package-by-package install instructions are replaced wherever they describe monorepo development. Ordinary consumer `npm install @bitpay-labs/...` examples remain valid.
+- [x] Tracked executable/configuration files contain no Lerna invocation, dependency, bootstrap implementation, obsolete lock concatenation, or active stale Docker path. Historical changelog prose may mention Lerna.
+- [x] Legacy Travis, Makefile, benchmark and manual-browser workflows each have an explicit retain/update/retire disposition; nested benchmark locks are not accidentally deleted.
+- [x] New documentation commands are executed in the disposable acceptance checkout. No unit tests are required for prose edits.
+
+Status: **implemented and verified against the real repository.** Full account, exact commands/output, and every legacy-artifact disposition in [evidence.md](../../artifacts/workspaces/task5.2/evidence.md); summary in [bitcore-task-5.2-results.json](bitcore-task-5.2-results.json).
 
 ### Task 5.3 — Run the final acceptance matrix and record the handoff
 
