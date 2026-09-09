@@ -87,8 +87,10 @@ export async function sign(args: {
     let rejected = false;
     const reject = (err) => { if (!rejected) { rejected = true; _reject(err); } };
 
+    let connErrs = 0;
     tssSign.subscribe();
     tssSign.on('roundsubmitted', (round) => {
+      connErrs = 0;
       storeSession(tssSign.exportSession());
       spinner.message(`Round ${round} submitted`);
     });
@@ -103,6 +105,14 @@ export async function sign(args: {
         spinner.cancel(e.message);
         rmSessionState();
         return reject(new ProcessCancelled());
+      } else if (e instanceof Errors.CONNECTION_ERROR) {
+        // Reduce the noise of transient errors
+        connErrs++;
+        if (connErrs > 10) {
+          prompt.log.warn(e.message);
+          connErrs = 0;
+        }
+        return;
       }
       prompt.log.error('Unexpected error during TSS signing: ' + (e.stack || e));
     });

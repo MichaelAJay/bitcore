@@ -37,17 +37,33 @@ export class TssRouter {
     });
 
     router.get('/v1/tss/keygen/:id/:round', authTssRequest(), async function(req, res) {
+      let interval: NodeJS.Timeout;
       try {
         const { id, round } = req.params as { [key: string]: string };
+        const { maxWaitTime } = req.query as { [key: string]: string };
         const copayerId = req.headers['x-identity'];
         if (round === 'secret') {
           const secret = await TssKeyGen.getBwsJoinSecret({ id, copayerId });
           return res.json({ secret });
         }
-        const { messages, publicKey } = await TssKeyGen.getMessagesForParty({ id, round: parseInt(round), copayerId });
-        return res.json({ messages, publicKey });
+
+        // Validate access and fetch session before committing to a streaming response, so that errors like
+        //   "session not found" or "not a participant" can still be returned with a proper
+        //   HTTP status instead of silently becoming an empty 200 (see below).
+        const session = await TssKeyGen.getSessionForCopayer({ id, copayerId });
+
+        // Keep the connection alive while waiting for the change stream to return a result.
+        // Headers must be finalized before writing the first heartbeat byte.
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        interval = setInterval(() => res.write('\n'), 1000);
+        req.on('close', () => clearInterval(interval));
+
+        const { messages, publicKey } = await TssKeyGen.getMessagesForParty({ session, round: parseInt(round), copayerId, maxWaitTimeSec: parseInt(maxWaitTime) });
+        return res.end(JSON.stringify({ messages, publicKey }));
       } catch (err) {
         return returnError(err ?? 'unknown', res, req);
+      } finally {
+        clearInterval(interval);
       }
     });
 
@@ -104,13 +120,30 @@ export class TssRouter {
     });
 
     router.get('/v1/tss/sign/:id/:round', authTssRequest(), async function(req, res) {
+      let interval: NodeJS.Timeout;
       try {
         const { id, round } = req.params as { [key: string]: string };
+        const { maxWaitTime } = req.query as { [key: string]: string };
         const copayerId = req.headers['x-identity'];
-        const { messages, signature, participants } = await TssSign.getMessagesForParty({ id, round: parseInt(round), copayerId });
-        return res.json({ messages, signature, participants });
+
+        // Validate access and fetch session before committing to a streaming response, so that errors like
+        //   "session not found" or "not a participant" can still be returned with a proper
+        //   HTTP status instead of silently becoming an empty 200 (see below).
+        const session = await TssSign.getSessionForCopayer({ id, copayerId });
+
+        // Keep the connection alive while waiting for the change stream to return a result.
+        // Headers must be finalized before writing the first heartbeat byte.
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        interval = setInterval(() => res.write('\n'), 1000);
+        req.on('close', () => clearInterval(interval));
+
+        const { messages, signature, participants } = await TssSign.getMessagesForParty({ session, round: parseInt(round), copayerId, maxWaitTimeSec: parseInt(maxWaitTime) });
+        clearInterval(interval);
+        return res.end(JSON.stringify({ messages, signature, participants }));
       } catch (err) {
         return returnError(err ?? 'unknown', res, req);
+      } finally {
+        clearInterval(interval);
       }
     });
 
