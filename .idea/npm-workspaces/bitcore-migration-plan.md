@@ -538,11 +538,59 @@ RED: run a resolution probe in the old test image that requires the resolved cry
 
 GREEN / acceptance:
 
-- [ ] `docker compose -f packages/crypto-rpc/docker-compose.yml config` validates after path changes.
-- [ ] A no-cache RPC test image build succeeds from repository root without any host node_modules or prebuilt crypto-wallet-core.
-- [ ] Inside the runner, resolving `@bitpay-labs/crypto-wallet-core` points to `/bitcore/packages/crypto-wallet-core/ts_build/src/index.js`; internal primitive dependencies also point to workspace sources.
-- [ ] Existing `npm run test:crypto-rpc` reaches Hardhat compile/deploy/test and RPC tests with the expected chain endpoints, retaining c8's configured coverage thresholds.
-- [ ] No scoped dependency is substituted by an unscoped bind mount. The supported test runner does not invoke `migrate`; the unchanged defect in the separate start service is recorded with its follow-up scope.
+- [x] `docker compose -f packages/crypto-rpc/docker-compose.yml config` validates after path changes.
+- [x] A no-cache RPC test image build succeeds from repository root without any host node_modules or prebuilt crypto-wallet-core.
+- [x] Inside the runner, resolving `@bitpay-labs/crypto-wallet-core` points to `/bitcore/packages/crypto-wallet-core/ts_build/src/index.js`; internal primitive dependencies also point to workspace sources.
+- [x] Existing `npm run test:crypto-rpc` reaches Hardhat compile/deploy/test and RPC tests with the expected chain endpoints, retaining c8's configured coverage thresholds.
+- [x] No scoped dependency is substituted by an unscoped bind mount. The supported test runner does not invoke `migrate`; the unchanged defect in the separate start service is recorded with its follow-up scope.
+
+Status: **implemented and verified against the real repository, with one pre-existing gap left
+un-worked-around.** Both Dockerfiles now install/compile from `/bitcore` (root) using the same
+pinned-base/`check-runtime.cjs`/`npm ci --foreground-scripts` shape as Task 4.1, then set
+`WORKDIR /bitcore/packages/crypto-rpc` for execution; the old `ssh-keyscan` step was dropped
+(confirmed unnecessary -- the one `git+ssh` dependency reachable from this repo's lockfile resolves
+over plain HTTPS, and Task 4.1's own root install already completed without it). `docker-compose.yml`
+moved the `start`/`test_runner` build contexts to the monorepo root and removed the
+`../crypto-wallet-core` bind mounts along with the dead, unreferenced `cwc` external volume. RED
+reproduced for real -- and more thoroughly dead than the plan anticipated: building the old, committed
+Dockerfile-test/compose and attaching the documented bind mount showed it targets the *unscoped*
+module name, while every real `import` in crypto-rpc's source uses the *scoped*
+`@bitpay-labs/crypto-wallet-core` -- so the old local-source override never took effect at all,
+bind mount or not; the test runner was always silently exercising the registry-published copy.
+GREEN reproduced for real: `docker compose config` validates; a `--no-cache` image builds clean from
+root context with no host `node_modules`/prebuilt crypto-wallet-core; inside it,
+`@bitpay-labs/crypto-wallet-core` resolves to exactly
+`/bitcore/packages/crypto-wallet-core/ts_build/src/index.js`, and `verify.cjs links` confirms
+crypto-wallet-core's own internal primitives (`bitcore-lib`/`-cash`/`-doge`/`-ltc`) resolve to real
+workspace source too, not a nested registry copy. Two real, previously-latent defects were found and
+fixed along the way, not just documented: a root `.dockerignore` bug (bare `artifacts`/`coverage`/
+`.nyc_output` patterns only anchor to the build-context root in Docker, unlike `.gitignore` -- silently
+letting crypto-rpc's own Hardhat `blockchain/EVM/artifacts`/`cache` leak into the image once this task
+gave crypto-rpc's Dockerfiles root context; fixed with `**/`-prefixed patterns, reconfirmed the root
+image still passes Task 4.1's own verification with no regression); and a genuine `npx`/npm-workspaces
+regression (`npm run hardhat:compile` failed with `HH1: You are not inside a Hardhat project` even
+though the config file is exactly at cwd, traced to `npx` silently resetting cwd to the nearest
+ancestor package.json once `hardhat` moved from a standalone per-package install to root-hoisted --
+confirmed workspaces-specific against two disposable npm fixtures, not general `npx` behavior; fixed
+by adding `packages/crypto-rpc/blockchain/EVM/package.json`). The real
+`npm run test:crypto-rpc` was then run end to end against real chain containers: the `rippled` service
+itself (untouched by this task) fails to build on this `arm64` host -- Ripple's own apt repo publishes
+no `arm64` package, confirmed by building the untouched `rippled.Dockerfile` standalone with an
+identical failure, the same class of already-documented arm64-host/x86_64-CI gap as Tasks 2.2 and 4.1.
+Worked around with a temporary, uncommitted compose copy (rippled service removed) to still exercise
+the real pipeline: Hardhat compile/deploy/test against real `geth`, then the full RPC mocha suite
+against real `bitcoin`/`bitcoin-cash`/`dogecoin`/`litecoin`/`lightning`/`lightning2`/`solana` --
+393 passing. 20 of 21 failures are exactly the expected shape of an unreachable `rippled`
+(`NotConnectedError: getaddrinfo ENOTFOUND rippled` and direct consequences of it), and the resulting
+79.49%-vs-80%-required branch coverage shortfall is the direct, expected consequence of never
+executing XRP code paths in this run -- not a regression. The 21st failure (`LND Tests`, a 30-second
+sync-wait timeout hardcoded in the test file itself) was reproduced twice more in isolation and traced
+to this test's own chain images running only as `linux/amd64` (QEMU-emulated on this arm64 host, per
+`docker image inspect`); this task's changes never touch that test, those images, or any timeout, and
+the same budget against the same emulated images would fail identically under the pre-Task-4.2 setup
+on this host -- recorded as a pre-existing, environment-specific limitation rather than fixed. Full
+account, exact commands/output, and all four findings are in
+[evidence.md](../../artifacts/workspaces/task4.2/evidence.md).
 
 ### Task 4.3 — Make local test containers independent of host dependency layout
 
