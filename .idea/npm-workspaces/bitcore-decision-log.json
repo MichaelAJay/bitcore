@@ -362,6 +362,63 @@
           }
         }
       ]
+    },
+    {
+      "phase": 4,
+      "task": "4.3",
+      "planSection": "Phase 4 -- Migrate container workflows / Task 4.3 -- Make local test containers independent of host dependency layout",
+      "commit": "uncommitted (working tree changes as of base commit 733342d34d0de272cfc791f5fd30b6a8d6f203ba; pending user review/commit)",
+      "date": "2026-09-09",
+      "summary": "The local test-container compose file bind-mounts the host checkout at /bitcore for live source editing, but that bind mount also completely replaces whatever the image installed at build time -- including, once npm workspaces nests a package's own conflicting dependency version, real host-compiled native addons. Confirmed for real in this checkout (not merely theoretically): bitcore-node and bitcore-wallet-service both nest their own secp256k1@4.0.3 (root hoists 3.7.1), and each nested copy is a genuine host-compiled macOS/arm64 addon.node. Fixed by layering one container-owned named volume over root node_modules and over every workspace package's own node_modules path on top of the existing bind mount, and by adding an entrypoint script that runs the real npm ci/compile against whatever the mounts hold at container start before handing off to the actual test command.",
+      "changes": [
+        {
+          "file": "docker-compose.test.local.yml",
+          "change": "test_runner gets an explicit entrypoint: pointing at the new scripts/workspaces/docker-local-entrypoint.sh, plus one named volume mounted over root node_modules and over every workspace package's own node_modules path (mirroring root package.json's workspaces list), layered on top of the existing .:/bitcore bind mount. A top-level volumes: block declares all 19 volumes.",
+          "reasoning": "A bind mount at /bitcore replaces the image's own filesystem there entirely, so a volume is the only way to keep dependency storage container-owned underneath it; root alone is not enough because npm workspaces nests a package's own node_modules directly under that package whenever its resolved version conflicts with what gets hoisted to root, and that nested copy can be a real host-compiled native addon (confirmed: secp256k1 in bitcore-node/bitcore-wallet-service). One volume per workspace mirrors root package.json's own list so every current nesting site is covered, not just the one this checkout happens to have today."
+        },
+        {
+          "file": "scripts/workspaces/docker-local-entrypoint.sh",
+          "change": "New file. Runs node scripts/workspaces/check-runtime.cjs then npm ci --foreground-scripts (which triggers the existing postinstall compile chain), then execs the given command -- a single-string argument is run through a shell, anything else is exec'd as-is.",
+          "reasoning": "The install/compile has to happen after the bind mount and volumes are actually in place, not baked into the image at build time, since the bind mount later replaces whatever the image had there. set -euo pipefail stops the script (and the container) before the exec if the install fails, satisfying the 'install failure stops the test runner before application tests begin' requirement."
+        },
+        {
+          "file": "ci.sh",
+          "change": "run's docker compose invocation no longer overrides the entrypoint with the raw test command (--entrypoint \"$2\"); it now passes \"$2\" as the command to the new entrypoint script, and adds --rm so ad hoc run containers no longer need down's own manual sweep to disappear.",
+          "reasoning": "docker compose run --entrypoint '<string>' bypasses any entrypoint: configured in the compose file entirely (confirmed empirically), so the old form would have skipped the new install-before-test-command entrypoint script if left unchanged. Separately, --rm: docker compose run without it leaves each one-off container behind in Exited state after every invocation, accumulating until manually swept -- which is exactly why ci.sh down already carried its own docker container rm sweep over bitcore-test_runner-run-* names. With --rm the container self-removes on every exit (including non-zero exits and Ctrl+C), making that sweep a redundant safety net rather than the only cleanup path. Accepted trade-off: a failed container can no longer be inspected after the fact, but compose run streams its output live, so only post-mortem debugging is lost (drop --rm temporarily if ever needed). --rm removes only the container, not the named node_modules_* volumes, so this task's dependency-storage isolation is unaffected."
+        }
+      ],
+      "findings": [
+        {
+          "id": "rippled-arm64-build-gap",
+          "title": "rippled still does not build on this arm64 host",
+          "status": "recorded, not fixed -- pre-existing, environment-specific, unrelated to this task",
+          "fixedBy": null,
+          "reproducibleFromMaster": true,
+          "summary": "Identical to the gap already recorded in Tasks 2.2, 4.1 and 4.2's own evidence: Ripple's own rippled-deb apt repository publishes no arm64 package. ci.sh run's depends_on chain still includes rippled, so exercising ci.sh run's literal, unmodified command on this host requires the same uncommitted, deleted-after-use no-rippled compose workaround Task 4.2 already used.",
+          "reproduce": {
+            "prerequisites": "Any arm64 host running Docker Desktop.",
+            "commands": [
+              "docker build --no-cache -t rippled-check -f .docker/rippled.Dockerfile ."
+            ],
+            "expectedResult": "apt-get install -y rippled fails with 'E: Unable to locate package rippled'."
+          }
+        },
+        {
+          "id": "rollup-linux-arm64-optional-dep-gap",
+          "title": "a real npm ci against this repo's own committed lockfile does not install linux-arm64 optional native binaries (rollup, swc, esbuild) on this host",
+          "status": "recorded, not fixed -- pre-existing, environment-specific, unrelated to this task",
+          "fixedBy": null,
+          "reproducibleFromMaster": true,
+          "summary": "bitcore-build's WebdriverIO browser-runner step (part of bitcore-lib's gulp test) fails with 'Cannot find module @rollup/rollup-linux-arm64-gnu. npm has a bug related to optional dependencies (https://github.com/npm/cli/issues/4828)'. Confirmed pre-existing and unrelated to this task's changes: reproduced identically against bitcore-test_runner:latest's own image-build-time npm ci (the untouched root Dockerfile's RUN npm ci --foreground-scripts, no bind mount, no volumes, no entrypoint script involved). This is npm's own documented optional-dependency bug interacting with a lockfile generated on a different OS (macOS) than the one npm ci runs on (Linux) -- a real, latent packaging defect in this checkout, surfaced for the first time by this task because it is the first task to run bitcore-lib's full gulp test (including its browser step) through a genuinely disposable, from-scratch npm ci on this architecture.",
+          "reproduce": {
+            "prerequisites": "Any linux/arm64 Docker host; the repo's own committed package-lock.json (generated on macOS).",
+            "commands": [
+              "docker run --rm --entrypoint sh bitcore-test_runner:latest -c \"node -e \\\"require('rollup')\\\"\""
+            ],
+            "expectedResult": "Error: Cannot find module @rollup/rollup-linux-arm64-gnu. npm has a bug related to optional dependencies (https://github.com/npm/cli/issues/4828)."
+          }
+        }
+      ]
     }
   ]
 }

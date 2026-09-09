@@ -602,13 +602,54 @@ Work: retain source editing through the existing `/bitcore` bind mount, but use 
 
 Acceptance:
 
-- [ ] From a disposable host checkout with no dependencies/output, `./ci.sh build` followed by a documented package test command installs/prepares and runs successfully in Linux.
-- [ ] Repeat with host dependencies present: the test process still loads only container-installed native dependencies.
-- [ ] Container workspace links point to visible local sources; compile output is available to the test runner after mounts are applied.
-- [ ] Tests preserve configured DB/chain environment and cwd. Install failure stops the test runner before application tests begin.
-- [ ] Commands use isolated Compose project/data resources and clean up those resources without touching another developer's services.
+- [x] From a disposable host checkout with no dependencies/output, `./ci.sh build` followed by a documented package test command installs/prepares and runs successfully in Linux.
+- [x] Repeat with host dependencies present: the test process still loads only container-installed native dependencies.
+- [x] Container workspace links point to visible local sources; compile output is available to the test runner after mounts are applied.
+- [x] Tests preserve configured DB/chain environment and cwd. Install failure stops the test runner before application tests begin.
+- [x] Commands use isolated Compose project/data resources and clean up those resources without touching another developer's services.
 
 RED/GREEN: reproduce the bind mount hiding image dependencies in the old layout, then pass the same cold-host test with the chosen storage approach.
+
+Status: **implemented and verified against the real repository.** `docker-compose.test.local.yml`'s
+`test_runner` keeps its existing `.:/bitcore` source bind mount but now also gets an explicit
+`entrypoint:` (a new `scripts/workspaces/docker-local-entrypoint.sh`) and one container-owned named
+volume layered over root `node_modules` plus every workspace package's own `node_modules` path,
+mirroring root `package.json`'s own workspaces list rather than only the one nesting site this
+checkout happens to have today. The entrypoint runs the real preflight/`npm ci --foreground-scripts`
+(triggering the existing compile chain) against whatever the mounts hold at container start, then
+hands off to the actual test command; `ci.sh`'s `run` no longer overrides the entrypoint with the raw
+command, it passes the command through to this script instead (and adds `--rm` so ad hoc run
+containers no longer need `down`'s own manual sweep). RED reproduced for real and more concretely than
+a generic "empty node_modules" check: this checkout's own real, pre-existing host `node_modules`
+already nests a genuine host-compiled macOS/arm64 `secp256k1` `addon.node` inside
+`packages/bitcore-node` and `packages/bitcore-wallet-service` (each needs `secp256k1@4.0.3` while root
+hoists `3.7.1` -- confirmed directly against `package-lock.json`, not assumed), and under the old
+bind-mount-only layout, loading that exact file inside the container throws `invalid ELF header` --
+going through the package's public API instead of loading the file directly silently falls back to a
+slower pure-JS path rather than crashing, the more dangerous failure mode. GREEN reproduced for real:
+a disposable install from brand-new volumes ran a genuine `npm ci --foreground-scripts` end to end
+(real `node-gyp` compiles targeting `linux/arm64`, `[verify:engines] PASS`, all seven packages
+compiling in order), after which the same nested file is a real Linux ELF addon at the correct nested
+version; workspace symlinks (`node_modules/@bitpay-labs/*`) still resolve through to the live mounted
+`/bitcore/packages/*` sources; compile output lands on the host checkout itself (not a volume) and is
+timestamped from the run just performed; a real desynced-lockfile install failure stopped the run
+before the test command executed (confirmed the command's expected output never appeared, exit `1`);
+and named volumes are Compose-project-prefixed (confirmed via `docker volume ls`) and were fully
+removed, without touching anything else on the host, by `ci.sh down`'s own `down -v`. A real,
+complete, passing application test (`test:bitcore-logging`, 29 passing, exit `0`) was run end to end
+through the exact command shape `ci.sh run` now produces (the literal `./ci.sh run` invocation is
+blocked by `depends_on`'s `rippled` service, the same already-documented arm64-host gap from Tasks
+2.2/4.1/4.2 -- worked around only for this verification with an uncommitted, deleted-after-use compose
+copy, matching Task 4.2's own precedent). One further real, pre-existing, out-of-scope defect was
+found along the way and left unfixed per this task's scope: `bitcore-lib`'s `gulp test` (Mocha:
+4694 passing) subsequently fails its own WebdriverIO/browser step on this host because a real `npm ci`
+against this repository's own committed (macOS-generated) lockfile does not install
+`@rollup/rollup-linux-arm64-gnu` on `linux/arm64` -- a documented npm optional-dependency bug
+(npm/cli#4828), reproduced identically against the untouched root Dockerfile's own image-build-time
+`npm ci` with no bind mount, volumes, or entrypoint involved, proving it predates and is unrelated to
+this task's changes. `ci.sh`'s own `--help` text already describes this task's unchanged
+command-line interface, so no separate "local test instructions" doc needed to be added. Full account,
+exact commands/output, and both findings are in [evidence.md](../../artifacts/workspaces/task4.3/evidence.md).
 
 ## Phase 5 — Validate distribution and complete removal
 
