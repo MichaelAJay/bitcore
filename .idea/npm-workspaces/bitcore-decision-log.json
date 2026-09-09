@@ -225,6 +225,143 @@
           "reasoning": "Mirrors this repo's own gitignore conventions for these paths (wallet-service's .gitignore already treats logs/pids/*.log as non-source). Rebuilding all three images from scratch after this fix confirmed both the fix (packages/bitcore-wallet-service/logs no longer exists in any image) and its effect: disk usage dropped to 6.01GB/4.78GB/4.78GB respectively."
         }
       ]
+    },
+    {
+      "phase": 4,
+      "task": "4.2",
+      "planSection": "Phase 4 -- Migrate container workflows / Task 4.2 -- Use local scoped workspaces in RPC test containers",
+      "commit": "1c3d766e0c34ecfaa205303c958a018719e33eff",
+      "date": "2026-09-09",
+      "summary": "crypto-rpc's test/start Dockerfiles were the last two in the repo still doing a standalone, non-workspace npm install and papering over the resulting registry-vs-local mismatch with a docker-compose bind mount. Moved them to the same root-install shape as Task 4.1's Dockerfiles. Three real, previously-undocumented defects surfaced and were fixed while doing this (see `findings` below, each with its own reproduction steps); two more real, pre-existing, architecture/emulation-specific test gaps were found, confirmed unrelated to this task's own changes, and left recorded rather than worked around, per this task's scope.",
+      "changes": [
+        {
+          "file": "packages/crypto-rpc/test/docker/Dockerfile-test",
+          "change": "Rewritten from `WORKDIR /crypto-rpc; COPY package.json .; npm install` (plus an `ssh-keyscan github.com` step) to the pinned-base/check-runtime.cjs-preflight/`npm ci --foreground-scripts` shape already used by the root/node/wallet-service Dockerfiles, installing/compiling from `/bitcore` and only then setting `WORKDIR /bitcore/packages/crypto-rpc` for execution. The solc PATH addition is preserved, repointed at the new absolute path.",
+          "reasoning": "Root is what actually links this package's own scoped local dependency (@bitpay-labs/crypto-wallet-core) to its workspace source; a standalone per-package install can only ever get a registry copy. The `ssh-keyscan` step was dropped: confirmed via `npm cache ls` that the one `git+ssh://` dependency reachable from this repo's own lockfile (bitpay/node-buffers, pulled in by the p2p packages, unrelated to crypto-rpc) is actually fetched by npm as a plain HTTPS codeload.github.com tarball, and Task 4.1's own root `npm ci` already completed without any SSH setup."
+        },
+        {
+          "file": "packages/crypto-rpc/start.dockerfile",
+          "change": "Same rewrite as Dockerfile-test.",
+          "reasoning": "Same reasoning; the `start` service and its own known-missing `migrate` command are otherwise left unchanged, per this task's own scope."
+        },
+        {
+          "file": "packages/crypto-rpc/docker-compose.yml",
+          "change": "`start`/`test_runner` build `context` moved from `.` to `../..` (the monorepo root) with `dockerfile` paths adjusted to match. Removed the `../crypto-wallet-core:/crypto-rpc/node_modules/crypto-wallet-core` bind mounts from both services and the `cwc` external volume (declared, referenced by no service).",
+          "reasoning": "See finding `dead-bind-mount` below: the bind mount targeted the unscoped `crypto-wallet-core` module name, but every real `import` in this package's source uses the scoped `@bitpay-labs/crypto-wallet-core` -- it never actually overrode anything, bind mount or not, so removing it changes no real behavior."
+        },
+        {
+          "file": ".dockerignore",
+          "change": "`artifacts`, `coverage`, `.nyc_output` (bare patterns) changed to `**/artifacts`, `**/cache` (new), `**/coverage`, `**/.nyc_output`.",
+          "reasoning": "See finding `dockerignore-bare-pattern-bug` below."
+        },
+        {
+          "file": "packages/crypto-rpc/blockchain/EVM/package.json",
+          "change": "New file: `{\"private\": true, \"type\": \"module\", \"description\": \"...\"}`.",
+          "reasoning": "See finding `npx-workspaces-cwd-reset` below."
+        },
+        {
+          "file": "Dockerfile",
+          "change": "Dropped two comment clauses citing `bitcore-migration-plan.md`/`bitcore-acceptance-spec.md` by filename (no code change).",
+          "reasoning": "This task's own new Dockerfile comments were about to repeat the same dangling-planning-doc-citation pattern from Task 4.1; caught it while writing them and cleaned up the three already-committed instances (this file plus the two below) instead of only avoiding it in the new files."
+        },
+        {
+          "file": "packages/bitcore-node/Dockerfile",
+          "change": "Same comment cleanup as the root Dockerfile.",
+          "reasoning": "Same reasoning."
+        },
+        {
+          "file": "packages/bitcore-wallet-service/Dockerfile",
+          "change": "Same comment cleanup as the root Dockerfile.",
+          "reasoning": "Same reasoning."
+        }
+      ],
+      "findings": [
+        {
+          "id": "dead-bind-mount",
+          "title": "crypto-rpc's docker-compose bind mount never actually overrode the module its own source imports",
+          "status": "fixed",
+          "fixedBy": "Removed the bind mount and the `cwc` volume entirely (packages/crypto-rpc/docker-compose.yml, this commit).",
+          "reproducibleFromMaster": true,
+          "summary": "The pre-Task-4.2 docker-compose.yml bind-mounted the host's packages/crypto-wallet-core directory at `/crypto-rpc/node_modules/crypto-wallet-core` (unscoped module name) so local edits to crypto-wallet-core would be picked up by the test run. But every real `import` in crypto-rpc's own source (lib/xrp/XrpClientAdapter.js, lib/eth/Erc20Rpc.js, lib/sol/*.js, ...) uses the *scoped* name `@bitpay-labs/crypto-wallet-core`, which the standalone `npm install` satisfies from the public registry (`@bitpay-labs/crypto-wallet-core@11.10.4` is genuinely published there) regardless of the mount. The bind mount was dead configuration: it never affected what the test run actually exercised.",
+          "reproduce": {
+            "prerequisites": "Clean checkout of master (or any commit before this one on this branch -- packages/crypto-rpc/test/docker/Dockerfile-test and docker-compose.yml are byte-identical between master and this task's starting commit, 572bfca99).",
+            "commands": [
+              "cd packages/crypto-rpc",
+              "docker build --no-cache -t crypto-rpc-red -f test/docker/Dockerfile-test .",
+              "docker run --rm -v \"$PWD/../crypto-wallet-core:/crypto-rpc/node_modules/crypto-wallet-core\" --entrypoint node crypto-rpc-red -e \"console.log('unscoped ->', require.resolve('crypto-wallet-core')); console.log('scoped (what the source actually imports) ->', require.resolve('@bitpay-labs/crypto-wallet-core'));\""
+            ],
+            "expectedResult": "The unscoped path resolves under the bind mount (`/crypto-rpc/node_modules/crypto-wallet-core/...`); the scoped path -- the one the real source imports -- resolves under `/crypto-rpc/node_modules/@bitpay-labs/crypto-wallet-core/...`, the registry-installed copy, proving the mount was never in the resolution path that mattered."
+          }
+        },
+        {
+          "id": "dockerignore-bare-pattern-bug",
+          "title": ".dockerignore's bare artifacts/coverage/.nyc_output patterns only matched at the build-context root, not at any depth",
+          "status": "fixed",
+          "fixedBy": "Changed to **/-prefixed patterns and added **/cache (.dockerignore, this commit).",
+          "reproducibleFromMaster": false,
+          "notReproducibleReason": "master's .dockerignore is minimal (just **/node_modules) and master's crypto-rpc Dockerfiles never build from root context, so the bug had nothing to leak on master. It requires both Task 4.1's root-context Dockerfile/.dockerignore scheme and this task's own change giving crypto-rpc's Dockerfiles that same root context.",
+          "summary": "Docker's own ignore-pattern matching is not gitignore-equivalent for bare names: a pattern with no `/` anchors to the build-context root only, unlike .gitignore where it matches at any depth. Task 4.1's .dockerignore used bare `artifacts`/`coverage`/`.nyc_output`, commented as mirroring this repo's .gitignore conventions -- this was latent and harmless there (neither bitcore-node nor bitcore-wallet-service has a directory literally named `artifacts` at any depth) and only became a real leak once crypto-rpc's own Dockerfiles gained root build context: packages/crypto-rpc/blockchain/EVM/artifacts and cache (Hardhat's own regenerated compile output) were shipped into the image.",
+          "reproduce": {
+            "prerequisites": "On this branch, at the commit before this task's .dockerignore fix (parent of 1c3d766e0), or simply revert the **/-prefixes back to bare names locally.",
+            "commands": [
+              "git show 572bfca99:.dockerignore > /tmp/old.dockerignore && cp .dockerignore /tmp/new.dockerignore && cp /tmp/old.dockerignore .dockerignore",
+              "docker build --no-cache -f - -t dockerignore-probe . <<'EOF'\nFROM alpine\nWORKDIR /x\nCOPY . .\nRUN find packages/crypto-rpc/blockchain/EVM -maxdepth 1\nEOF",
+              "cp /tmp/new.dockerignore .dockerignore"
+            ],
+            "expectedResult": "The `find` output lists `artifacts` and `cache` alongside `contracts`/`hardhat.config.js`/etc., proving they were not excluded from the build context despite the bare .dockerignore entries."
+          }
+        },
+        {
+          "id": "npx-workspaces-cwd-reset",
+          "title": "npx under npm workspaces silently resets cwd to the nearest ancestor package.json, breaking Hardhat's own cwd-based project detection",
+          "status": "fixed",
+          "fixedBy": "Added packages/crypto-rpc/blockchain/EVM/package.json ({\"type\": \"module\"}) so the directory has its own package.json again (this commit).",
+          "reproducibleFromMaster": false,
+          "notReproducibleReason": "master has no `workspaces` field at all (Lerna-based) -- this is specifically npm-workspaces behavior, and only manifests once `hardhat` moves from a standalone per-package install (nested under packages/crypto-rpc/node_modules) to root-hoisted, which only happens once crypto-rpc's own Dockerfiles install from root (this task).",
+          "summary": "`npm run hardhat:compile` (`cd blockchain/EVM/ && npx hardhat compile`) failed with `HardhatError: HH1: You are not inside a Hardhat project`, even though hardhat.config.js is present at exactly that cwd and the direct binary (`/bitcore/node_modules/.bin/hardhat compile`, bypassing npx) succeeds from the identical directory. Traced to npx itself: `npx node -e \"console.log(process.cwd())\"` run from blockchain/EVM/ (which has no package.json of its own) printed the crypto-rpc package root, not the real shell cwd. Confirmed this is npm-workspaces-specific, not general npx behavior, against the same npm version (10.9.2) in two disposable fixtures: a plain (non-workspaces) npm project preserves the real cwd from a package-less subdirectory; a minimal npm-workspaces fixture (root `\"workspaces\": [\"packages/foo\"]`, `packages/foo/sub` with no package.json) reproduces the identical cwd-reset to `packages/foo`.",
+          "reproduce": {
+            "prerequisites": "This branch, with packages/crypto-rpc/blockchain/EVM/package.json removed (the fix this finding motivated).",
+            "commands": [
+              "rm packages/crypto-rpc/blockchain/EVM/package.json",
+              "docker build --no-cache -t crypto-rpc-npx-bug -f packages/crypto-rpc/test/docker/Dockerfile-test .",
+              "docker run --rm --entrypoint sh crypto-rpc-npx-bug -c 'cd blockchain/EVM && npx hardhat compile'",
+              "git checkout -- packages/crypto-rpc/blockchain/EVM/package.json"
+            ],
+            "expectedResult": "Fails with `HardhatError: HH1: You are not inside a Hardhat project`. A minimal, isolated reproduction of the underlying npm behavior (no Docker/Hardhat needed): create a root package.json with a `workspaces` array naming one member package, put a sub-directory with no package.json of its own inside that member, then run `npx node -e \"console.log(process.cwd())\"` from that sub-directory -- it prints the member package's root, not the real cwd."
+          }
+        },
+        {
+          "id": "rippled-arm64-packaging-gap",
+          "title": "rippled's own apt repository publishes no arm64 package",
+          "status": "recorded, not fixed -- pre-existing, unrelated to this task",
+          "fixedBy": null,
+          "reproducibleFromMaster": true,
+          "summary": "packages/crypto-rpc/test/docker/rippled.Dockerfile (byte-identical between master and this branch, untouched by this task) fails to build on an arm64 host because Ripple's own `rippled-deb` apt repository only publishes `amd64` packages. This blocks a full, unmodified `npm run test:crypto-rpc` run on Apple Silicon -- the same class of 'arm64 host, CI's real x86_64 executor not exercised here' gap already documented in Task 2.2's and Task 4.1's own evidence. Worked around locally with a temporary, uncommitted compose copy (rippled service removed) to still exercise the rest of the pipeline end to end; not something this task's file changes touch or can fix.",
+          "reproduce": {
+            "prerequisites": "Any arm64 host (e.g. Apple Silicon) with Docker Desktop; works identically on master.",
+            "commands": [
+              "docker build --no-cache -f packages/crypto-rpc/test/docker/rippled.Dockerfile packages/crypto-rpc"
+            ],
+            "expectedResult": "Fails at `apt-get install -y rippled` with `E: Unable to locate package rippled`."
+          }
+        },
+        {
+          "id": "lnd-30s-emulation-timeout",
+          "title": "test/lnd.js's own 30-second sync-wait timeout is too tight when its chain images run emulated",
+          "status": "recorded, not fixed -- pre-existing, environment-specific, unrelated to this task",
+          "fixedBy": null,
+          "reproducibleFromMaster": true,
+          "summary": "packages/crypto-rpc/test/lnd.js (byte-identical between master and this branch) hardcodes `this.timeout(30000)` on its `describe('LND Tests', ...)` block, overriding any CLI --timeout. Its `before all` hook mines 120 regtest blocks then polls both LND nodes' `getWalletInfo()` until synced; on this arm64 host this genuinely doesn't finish inside 30s. Both of this test's own chain dependencies that are slow here (kajoseph/bitcoin-core:22.0, sbhat96/lnd-v0.14.1-beta) are `linux/amd64`-only images (confirmed via `docker image inspect`), so they run under QEMU emulation on arm64, unlike CI's real x86_64 executor. Reproduced three times: once inside the full suite, once against reused LND wallet state (a different, expected failure: `wallet already unlocked`), and once against genuinely fresh volumes with `mocha --timeout 180000` on the CLI, which made no difference since the suite's own `this.timeout(30000)` wins regardless. This task's changes never touch this test, its chain images, or any timeout, and the same 30-second budget against the same emulated images would fail identically on master.",
+          "reproduce": {
+            "prerequisites": "Any arm64 host running Docker Desktop (images pull as amd64 and run under emulation); works from master using master's own (bind-mount-based) Dockerfile-test/docker-compose.yml.",
+            "commands": [
+              "cd packages/crypto-rpc && docker compose up -d bitcoin lightning lightning2",
+              "docker compose run --rm test_runner sh -c 'cd /crypto-rpc && npx mocha test/lnd.js'"
+            ],
+            "expectedResult": "`before all` hook for \"should be able to derive and fund an on chain address\" times out at 30000ms while polling for both LND nodes to reach is_synced_to_chain."
+          }
+        }
+      ]
     }
   ]
 }
