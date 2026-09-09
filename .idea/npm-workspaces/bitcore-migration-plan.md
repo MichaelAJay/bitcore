@@ -670,12 +670,12 @@ Work:
 
 Acceptance:
 
-- [ ] Dry-run output names each selected package once, excludes private packages, reports tarball paths, propagates failures, and makes no publish/tag/version calls.
-- [ ] Tarballs include declared `main`, `types`, bins, required shared build configs and service templates; generated entry points are not lost through `.gitignore` / `.npmignore` interaction.
-- [ ] Manifests in tarballs retain publishable semver dependencies and contain no filesystem/workspace protocols or absolute checkout paths.
-- [ ] In temporary consumers outside the monorepo, install the candidate tarballs for the complete local runtime closure together so npm cannot silently substitute released internal packages. Verify actual installed versions/paths and exercise representative public APIs and ESM RPC imports on Node 22. Servers use a separate configured smoke process.
-- [ ] Validate each package's declared direct dependencies independently of what the combined consumer happens to hoist; a consumer containing every tarball can mask missing declarations.
-- [ ] Public package versions, names, release-loop membership/order and access metadata are unchanged. Artifact-validation deduplication does not change publication policy. No registry publication is performed.
+- [x] Dry-run output names each selected package once, excludes private packages, reports tarball paths, propagates failures, and makes no publish/tag/version calls.
+- [x] Tarballs include declared `main`, `types`, bins, required shared build configs and service templates; generated entry points are not lost through `.gitignore` / `.npmignore` interaction.
+- [x] Manifests in tarballs retain publishable semver dependencies and contain no filesystem/workspace protocols or absolute checkout paths.
+- [x] In temporary consumers outside the monorepo, install the candidate tarballs for the complete local runtime closure together so npm cannot silently substitute released internal packages. Verify actual installed versions/paths and exercise representative public APIs and ESM RPC imports on Node 22. Servers use a separate configured smoke process.
+- [x] Validate each package's declared direct dependencies independently of what the combined consumer happens to hoist; a consumer containing every tarball can mask missing declarations.
+- [x] Public package versions, names, release-loop membership/order and access metadata are unchanged. Artifact-validation deduplication does not change publication policy. No registry publication is performed.
 
 RED/GREEN: package contents and public API behavior are regressions. Use targeted isolated-consumer RED for a confirmed missing runtime dependency or excluded build artifact.
 

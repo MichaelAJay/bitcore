@@ -419,6 +419,78 @@
           }
         }
       ]
+    },
+    {
+      "phase": 5,
+      "task": "5.1",
+      "planSection": "Phase 5 -- Validate distribution and complete removal / Task 5.1 -- Preserve package artifacts and explicit release commands",
+      "commit": "1cd4a712b508be25ecc017f8c6ae7201e496d3c5",
+      "date": "2026-09-09",
+      "summary": "Built on an unfinished, uncommitted prior attempt at this task (scripts/workspaces/pack.cjs, audit-packed.cjs, release-baseline.json, and package.json's `artifacts:check` script line already existed at the start of this task's session, from a separate agent run on the same branch). Real `npm pack`/`npm install` runs against this repository's actual packages -- not fixtures -- surfaced genuine bugs in that prior attempt and genuine packaging defects in the repository itself; both are fixed here. Two more genuine defects were found and are recorded as documented, out-of-scope exceptions rather than fixed, since repairing them means editing application source or the release loop's own shell logic, outside this task's packaging-metadata-only file scope.",
+      "changes": [
+        {
+          "file": "scripts/workspaces/audit-packed.cjs",
+          "change": "Fixed the prior attempt's walker: it only recursed into a fixed subdirectory allowlist (lib/ts_build/build/ecdsa/ecies) and never scanned a package's own top-level files, silently skipping every package that declares `main` directly at its root. Now also scans (non-recursively) each package directory's own top-level files. Added a DOCUMENTED_BASELINE_EXCEPTIONS set (mirroring the engines verifier's own socks5-client exception) and an `exceptions` field on the audit result, distinct from `failures`.",
+          "reasoning": "Confirmed the bug by running the prior attempt's audit against real packages: it reported zero imports at all for bitcore-lib, bitcore-p2p*, bitcore-mnemonic, crypto-rpc, and bitcore-build, none of which have their entry point under one of the four allowed subdirectory names. Fixing it then surfaced three real undeclared-dependency defects (see below) and one real defect this task chose not to fix (see findings)."
+        },
+        {
+          "file": "packages/crypto-wallet-core/package.json",
+          "change": "Added `files: [\"ts_build\"]`.",
+          "reasoning": "A real `npm pack --workspace=@bitpay-labs/crypto-wallet-core` (both via --workspace from root and run directly from inside the package directory) silently excluded the entire compiled ts_build/ directory, so the tarball's declared `main`/`types` did not resolve -- confirmed with a real pack and `tar -tzf` on the produced tarball, not just the --json dry-run summary. Empirically isolated to the root .gitignore's bare `ts_build` entry (removing that one line from a scratch copy of the root .gitignore made the pack include ts_build immediately; restored afterward) -- but the exact per-package mechanism npm-packlist uses to decide which of this repo's several ignore files applies to which workspace was not fully reverse-engineered, since the fix here (an explicit `files` field, which bypasses that mechanism entirely) is correct regardless of it. The currently-published @bitpay-labs/crypto-wallet-core@11.10.4 on the real npm registry does include ts_build (confirmed via `npm pack @bitpay-labs/crypto-wallet-core@11.10.4 --dry-run`), so this is not evidence anything already shipped is broken -- it is a real risk for the next publish from this checkout, which is exactly what this task's own required check exists to catch."
+        },
+        {
+          "file": "packages/bitcore-client/package.json",
+          "change": "Added `files: [\"ts_build\"]`.",
+          "reasoning": "Identical real defect and identical fix to crypto-wallet-core's, confirmed the same way (real pack, real tar inspection, real .gitignore-line isolation)."
+        },
+        {
+          "file": "packages/bitcore-node/package.json",
+          "change": "Moved `axios` from devDependencies to dependencies.",
+          "reasoning": "The fixed audit found compiled build/src/providers/chain-state/external/adapters/{alchemy,moralis}.js and .../external/streams/apiStream.js import `axios`, declared only as a devDependency -- an external consumer installing the published package would not receive it and would hit a runtime `Cannot find module` on those code paths."
+        },
+        {
+          "file": "packages/bitcore-wallet-client/package.json",
+          "change": "Moved `kbpgp` and `request-promise` from devDependencies to dependencies.",
+          "reasoning": "The fixed audit found compiled ts_build/src/util/fetchBitpayKeysAndVerify.js imports both, declared only as devDependencies. This file is not reachable from the package's declared public API (src/index.ts never imports it) but does ship in the tarball, so an undocumented deep subpath require of it would still hit a missing-module error for an external consumer; the audit deliberately scans a package's whole implementation tree rather than only what its public entry point reaches, so this was still flagged and is still fixed rather than left."
+        },
+        {
+          "file": "scripts/workspaces/release-baseline.json",
+          "change": "Corrected the prior attempt's `prepare` script lists for four of the 17 packages: removed bitcore-tss's `[\"build\"]` (its build script only bundles browser *test* files via webpack -- unrelated to what actually ships in the npm tarball, which is the already-committed index.js/ecdsa/ecies source); removed bitcore-client's, bitcore-wallet-service's, and crypto-wallet-core's redundant extra compile call (each duplicates exactly what the tool's own upfront `npm run compile` already runs for these three, since all three are members of scripts/workspaces/compile.cjs's COMPILE_ORDER).",
+          "reasoning": "Confirmed by reading each affected package's own package.json scripts (bitcore-tss's `build` invokes webpack against `test/**/*.test.js`, not its shipped index.js; bitcore-client/wallet-service/crypto-wallet-core's own `compile` script is byte-identical to what compile.cjs's COMPILE_ORDER already invokes for them) rather than assumed from the prior attempt's own values."
+        }
+      ],
+      "findings": [
+        {
+          "id": "wallet-service-src-import-baseurl",
+          "title": "wallet-service's shipped .d.ts files reference a bare `src/...` specifier that only resolves under this repository's own tsconfig",
+          "status": "recorded, not fixed -- pre-existing, outside this task's file scope",
+          "fixedBy": null,
+          "reproducibleFromMaster": true,
+          "summary": "packages/bitcore-wallet-service/src/lib/chain/eth/index.ts and xrp/index.ts (plus src/types/chain.d.ts and expressapp.d.ts, not confirmed reachable in the shipped ts_build output) import from a bare `src/lib/model`/`src/lib/server` specifier. It resolves locally only because this package's own tsconfig.json sets `baseUrl: \".\"`; tsc emits that identical literal specifier into the compiled .d.ts it ships, where it cannot resolve for an external consumer type-checking against the published package. Recorded as an explicit, named exception in scripts/workspaces/audit-packed.cjs's DOCUMENTED_BASELINE_EXCEPTIONS rather than fixed, since the real fix means editing application TypeScript source (the import specifiers themselves), outside Task 5.1's packaging-metadata-only file scope.",
+          "reproduce": {
+            "prerequisites": "This branch, at or after this commit.",
+            "commands": [
+              "node -e \"console.log(require('./scripts/workspaces/audit-packed.cjs').audit('packages/bitcore-wallet-service'))\""
+            ],
+            "expectedResult": "Result includes two entries in `exceptions` (not `failures`) naming ts_build/src/lib/chain/eth/index.d.ts and .../xrp/index.d.ts importing the undeclared name `src`."
+          }
+        },
+        {
+          "id": "packages-pub-swallows-failure",
+          "title": "packages/pub's release loop does not stop, and does not report failure, when a package's own `npm run pub` fails",
+          "status": "recorded, not fixed -- pre-existing, outside this task's file scope",
+          "fixedBy": null,
+          "reproducibleFromMaster": true,
+          "summary": "packages/pub joins each iteration's `npm run pub` to its `cd ..` with `;`, not `&&`, and sets no `set -e`. Confirmed with a real stub-npm run (test/workspaces/pub-entrypoint.test.cjs): a failing `npm run pub` on the very first package still lets the loop continue through every remaining package, and the overall script still exits 0. Recorded with the same disposition the plan already gives this same file's other pre-existing defect (the duplicate P2P Doge entry): baseline metadata, repair kept as a separate follow-up. This task's own file scope for packages/pub was verification (\"Verify the existing release entry point still routes into package scripts using a stub npm process\"), not repair of its failure-handling behavior.",
+          "reproduce": {
+            "prerequisites": "This branch, at or after this commit.",
+            "commands": [
+              "node --test test/workspaces/pub-entrypoint.test.cjs"
+            ],
+            "expectedResult": "Both tests pass, including the one asserting that every package in the release order still gets its own `npm run pub` call, and the script itself still exits 0, when every single one of those calls is made to fail."
+          }
+        }
+      ]
     }
   ]
 }
