@@ -49,6 +49,15 @@ export async function sign(args: {
     tssKey: walletData.key as TssKeyType
   });
 
+  // Reduces the noise of transient connection errors
+  const connResilience = (count: number, e: Error): number => {
+    if (count > 10) {
+      prompt.log.warn(e.message);
+      return 0;
+    }
+    return ++count;
+  };
+
   // Restore a previously-interrupted TSS session if it exists
   if (fs.existsSync(storedSessionFile)) {
     const storedSession = Encryption.decryptWithPassword(fs.readFileSync(storedSessionFile, 'utf8'), password);
@@ -57,27 +66,36 @@ export async function sign(args: {
 
   // ...otherwise, start a new TSS session
   } else {
-    try {
-      await tssSign.start({
-        id,
-        messageHash,
-        derivationPath,
-        password
-      });
-      storeSession(tssSign.exportSession());
-    } catch (err) {
-      if (err.message?.startsWith('TSS_ROUND_ALREADY_DONE')) {
-        const sig = await tssSign.getSignatureFromServer();
-        if (!sig) {
-          throw new Error('It looks like the TSS signature session was interrupted. Try deleting this proposal and creating a new one.');
+    let isTransientError = false;
+    let connErrs = 0;
+    do {
+      try {
+        await tssSign.start({
+          id,
+          messageHash,
+          derivationPath,
+          password
+        });
+        storeSession(tssSign.exportSession());
+      } catch (err) {
+        isTransientError = false; // reset
+        if (err.message?.startsWith('TSS_ROUND_ALREADY_DONE')) {
+          const sig = await tssSign.getSignatureFromServer();
+          if (!sig) {
+            throw new Error('It looks like the TSS signature session was interrupted. Try deleting this proposal and creating a new one.');
+          }
+          return {
+            signature: transformISignature(sig),
+            publicKey: sig.pubKey
+          };
+        } else if (err instanceof Errors.CONNECTION_ERROR) {
+          isTransientError = true;
+          connErrs = connResilience(connErrs, err);
+        } else {
+          throw err;
         }
-        return {
-          signature: transformISignature(sig),
-          publicKey: sig.pubKey
-        };
       }
-      throw err;
-    }
+    } while (isTransientError);
   }
 
   const spinner = prompt.spinner({ indicator: 'timer', onCancel: () => { tssSign.unsubscribe(); } });
@@ -107,14 +125,11 @@ export async function sign(args: {
         return reject(new ProcessCancelled());
       } else if (e instanceof Errors.CONNECTION_ERROR) {
         // Reduce the noise of transient errors
-        connErrs++;
-        if (connErrs > 10) {
-          prompt.log.warn(e.message);
-          connErrs = 0;
-        }
+        connErrs = connResilience(connErrs, e);
         return;
+      } else {
+        prompt.log.error('Unexpected error during TSS signing: ' + (e.stack || e));
       }
-      prompt.log.error('Unexpected error during TSS signing: ' + (e.stack || e));
     });
     tssSign.on('complete', async () => {
       try {
