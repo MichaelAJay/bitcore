@@ -513,19 +513,6 @@ export class EVMTransactionModel extends BaseTransaction<IEVMTransaction> {
         contractAddress: Web3.utils.toChecksumAddress(to),
         callStack
       };
-    } else if (`${abi.type}:${abi.name}` == 'INVOICE:pay') {
-      const params = this.parseAbiParams(abi);
-      const { value } = params;
-      // Check that the params are valid before parsing
-      if (!value) return;
-      return {
-        type: 'INVOICE:pay',
-        to: Web3.utils.toChecksumAddress(to),
-        from: Web3.utils.toChecksumAddress(from),
-        amount: Web3.utils.fromWei(value, 'wei'),
-        contractAddress: Web3.utils.toChecksumAddress(to),
-        callStack
-      };
     }
     return;
   }
