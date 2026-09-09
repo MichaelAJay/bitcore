@@ -1,5 +1,5 @@
 {
   "private": true,
   "type": "module",
-  "description": "Not a published or workspace package. Exists only to give this directory its own Node package boundary, matching the parent package's ESM type. Without it, `npx` invoked from here under npm workspaces resets its child process's cwd to the crypto-rpc package root before running Hardhat, which then can't find hardhat.config.js and fails with 'HH1: You are not inside a Hardhat project' -- see the npm-workspaces migration decision log, Task 4.2, for the full writeup and reproduction steps."
+  "description": "Not a published or workspace package. Exists only to give this directory its own Node package boundary so npx keeps its cwd for Hardhat. See README.md."
 }
