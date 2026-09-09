@@ -8,6 +8,9 @@
   "bin": {
     "bitcore-client": "./bin/wallet"
   },
+  "files": [
+    "ts_build"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },

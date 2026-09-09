@@ -4,6 +4,9 @@
   "description": "A multi-currency support library for address derivation, private key creation, and transaction creation",
   "main": "./ts_build/src/index.js",
   "types": "./ts_build/src/index.d.ts",
+  "files": [
+    "ts_build"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/bitpay/bitcore/tree/master/packages/crypto-wallet-core"

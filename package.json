@@ -58,7 +58,9 @@
     "test:bitcore-wallet-service": "npm run test --workspace=@bitpay-labs/bitcore-wallet-service --",
     "test:bitcore-wallet-client": "npm run test --workspace=@bitpay-labs/bitcore-wallet-client --",
     "test:crypto-rpc": "npm run test --workspace=@bitpay-labs/crypto-rpc --",
-    "test:crypto-wallet-core": "npm run test --workspace=@bitpay-labs/crypto-wallet-core --"
+    "test:crypto-wallet-core": "npm run test --workspace=@bitpay-labs/crypto-wallet-core --",
+    "artifacts:check": "node scripts/workspaces/pack.cjs",
+    "artifacts:consumer": "node scripts/workspaces/verify-consumer.cjs"
   },
   "config": {
     "commitizen": {
