@@ -1,4 +1,4 @@
-FROM node:22-bookworm
+FROM node:22.16.0-bookworm
 
 # Install Chrome
 
@@ -13,6 +13,11 @@ RUN set -x \
 
 ENV CHROME_BIN /usr/bin/google-chrome
 
+# Pin npm to the exact version recorded in package.json's packageManager
+# field, the same way CI's use_node step does (bitcore-migration-plan.md
+# target design item 3/4).
+RUN npm install -g npm@10.9.2
+
 # Log versions
 
 RUN set -x \
@@ -23,4 +28,9 @@ RUN set -x \
 WORKDIR /bitcore
 
 ADD . .
-RUN npm ci
+
+# Preflight before any install machinery runs; root preinstall re-checks
+# this too, but is not a substitute for it (bitcore-acceptance-spec.md §3).
+RUN node scripts/workspaces/check-runtime.cjs
+
+RUN npm ci --foreground-scripts

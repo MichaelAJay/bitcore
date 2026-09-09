@@ -1,17 +1,26 @@
-FROM node:22
+FROM node:22.16.0-bookworm
+
+# Pin npm to the exact version recorded in root package.json's
+# packageManager field, the same way CI's use_node step does
+# (bitcore-migration-plan.md target design item 3/4).
+RUN npm install -g npm@10.9.2
+
 RUN set -x && node -v && npm -v
+
 WORKDIR /bitcore
 
-# Add source
-# NOTE(danny): not the most optimal layering, but it works for now
-COPY lerna.json ./
-COPY package*.json ./
-COPY packages/ ./packages/
+# Add source: the whole monorepo root, not just this package. Root is what
+# links each backend package's scoped local dependency (this package's own
+# @bitpay-labs/crypto-wallet-core, @bitpay-labs/bitcore-logging, ...) to its
+# workspace source instead of a registry copy; installing/compiling from
+# only this package's own directory would defeat that.
+COPY . .
 
-# Install dependencies and build
-RUN npm install --ignore-scripts
-RUN npm run bootstrap
-RUN npm run compile
+# Preflight before any install machinery runs; root preinstall re-checks
+# this too, but is not a substitute for it (bitcore-acceptance-spec.md §3).
+RUN node scripts/workspaces/check-runtime.cjs
+
+RUN npm ci --foreground-scripts
 
 # Start the server
 WORKDIR /bitcore/packages/bitcore-node
