@@ -1,8 +1,7 @@
 FROM node:22.16.0-bookworm
 
 # Pin npm to the exact version recorded in root package.json's
-# packageManager field, the same way CI's use_node step does
-# (bitcore-migration-plan.md target design item 3/4).
+# packageManager field, the same way CI's use_node step does.
 RUN npm install -g npm@10.9.2
 
 RUN set -x && node -v && npm -v
@@ -17,7 +16,7 @@ WORKDIR /bitcore
 COPY . .
 
 # Preflight before any install machinery runs; root preinstall re-checks
-# this too, but is not a substitute for it (bitcore-acceptance-spec.md §3).
+# this too, but is not a substitute for it.
 RUN node scripts/workspaces/check-runtime.cjs
 
 RUN npm ci --foreground-scripts

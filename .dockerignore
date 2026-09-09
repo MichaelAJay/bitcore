@@ -11,9 +11,16 @@ packages/*/ts_build
 
 .git
 .idea
-artifacts
-coverage
-.nyc_output
+
+# `**/` is required for these to match at any depth: unlike .gitignore,
+# Docker only anchors a bare pattern to the build context root (confirmed
+# empirically -- a bare `artifacts` here silently let
+# packages/crypto-rpc/blockchain/EVM/artifacts and cache, Hardhat's own
+# regenerated compile output, leak into images built from root context).
+**/artifacts
+**/cache
+**/coverage
+**/.nyc_output
 .DS_Store
 
 # A developer's accumulated runtime logs/pids (wallet-service's own
