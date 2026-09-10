@@ -529,6 +529,44 @@
           }
         }
       ]
+    },
+    {
+      "phase": 5,
+      "task": "5.3",
+      "planSection": "Phase 5 -- Validate distribution and complete removal / Task 5.3 -- Run the final acceptance matrix and record the handoff",
+      "commit": "61cda0be7763de2926fecc9030cc303c8b6cecf5",
+      "date": "2026-09-10",
+      "summary": "The final acceptance matrix run (artifacts/workspaces/task5.3/handoff.md) found the one real, non-baseline gate failure: `npm run test:bitcore-node` passes on a properly Lerna-bootstrapped `master` (605 passing/16 pending/6 failing) but fails catastrophically on the candidate as originally locked (608/16/139 and 605/16/143 across three reproductions), from the identical declared `^11.7.5` mocha range in root package.json -- Task 2.1's lock regeneration happened to resolve `mocha@11.8.0` at that moment, where a properly Lerna-bootstrapped comparison resolves `mocha@11.7.5`. Root-caused precisely (not just reproduced) in this follow-up session by diffing the actual published `mocha@11.7.5` and `mocha@11.8.0` tarballs' `lib/suite.js`: 11.8.0 shipped a deliberate behavior change (mochajs/mocha#5422) making `Suite.prototype.timeout(ms)` cascade to every already-registered child test/suite, where 11.7.5 only set the suite's own `_timeout` with no cascade. `bitcore-node/test/helpers/integration.ts`'s `intAfterHelper` calls `describeContext.timeout(1)` from an `after` hook -- a pre-existing, unmodified-by-this-migration call that was harmless under 11.7.5's no-op-past-that-point semantics, but which 11.8.0's cascade turns into a real 1ms timeout forced onto whatever tests/suites are still attached to that suite object, corrupting later, unrelated test runs. Chose to pin mocha to an exact version rather than fix the test helper directly: the helper's fragility is real, pre-existing, application-test debt (not something this task's packaging/lockfile scope covers, and it touches ~15 call sites across `bitcore-node/test/integration/**`), while the immediate, narrowly-scoped, task-appropriate fix for a lockfile-timing regression is to stop the range from drifting again.",
+      "changes": [
+        {
+          "file": "package.json",
+          "change": "`\"mocha\": \"^11.7.5\"` -> `\"mocha\": \"11.7.5\"` (root devDependencies; exact pin, caret removed).",
+          "reasoning": "An exact pin was chosen over a looser tightening (e.g. `~11.7.5`) even though a tilde would also have blocked this specific incident (11.7.5 -> 11.8.0 is a minor bump, which `~` excludes but `^` allows): the existing `^11.7.5` was already the more conservative-looking of the two common ranges and still drifted, so this task treats mocha's own semver discipline as unproven for behavior-affecting changes. Since mocha here is a pure root devDependency (test tooling, not a runtime library with security-patch exposure), there is no real cost to requiring a manual bump for any future version, including patches."
+        },
+        {
+          "file": "package-lock.json",
+          "change": "Regenerated via a real root `npm install` against the tightened range; the single hoisted `mocha` entry now resolves to exact `11.7.5`.",
+          "reasoning": "bitcore-node declares no `mocha` devDependency of its own (confirmed) and relies entirely on root's hoisted copy, so tightening only root's declaration is sufficient to fix what `test:bitcore-node` actually runs against; `@wdio/mocha-framework`'s own unrelated `mocha: \"^11.8.0\"` dependency (used elsewhere, not by bitcore-node's test run) and bitcore-client's pre-existing exact `mocha: \"11.1.0\"` pin are unaffected and continue to resolve their own separate nested copies as before."
+        }
+      ],
+      "findings": [
+        {
+          "id": "bitcore-node-intafterhelper-timeout-leak",
+          "title": "bitcore-node's shared integration-test `after`-hook helper mutates a suite's timeout in a way current mocha now propagates to sibling test state",
+          "status": "recorded, not fixed -- pre-existing, outside this task's packaging/lockfile scope",
+          "fixedBy": null,
+          "reproducibleFromMaster": true,
+          "summary": "`test/helpers/integration.ts`'s `intAfterHelper(describeContext)` calls `describeContext.timeout(1)` from an `after` hook, relying on the (undocumented, and as of mocha 11.8.0, no-longer-true) assumption that mutating a `Suite`'s timeout from outside, after its own tests have already run, is inert. It happened to be true under mocha 11.7.5 and is not true under 11.8.0 (see this entry's own `summary` for the exact upstream change, mochajs/mocha#5422) -- meaning any future mocha upgrade risks silently reintroducing the same catastrophic cross-suite corruption this task's pin only defers. Verified with real (not synthetic) test files after applying this task's pin: running the real, compiled integration test files that actually invoke `intAfterHelper` directly through the now-pinned `mocha@11.7.5` produced zero occurrences of the bug's actual signature (`Timeout of 1ms exceeded`) across ~250 real tests; the correct, version-independent fix is to stop mutating the suite object from the `after` hook (e.g. set the timeout on the hook's own runnable instead) rather than to keep relying on whichever mocha version happens to make that mutation inert.",
+          "reproduce": {
+            "prerequisites": "This branch, at or after this commit; a real npm-workspaces install (bitcore-node has no `mocha` of its own and depends on whichever copy root hoists).",
+            "commands": [
+              "npm install mocha@11.8.0 --no-save",
+              "npm run test:bitcore-node"
+            ],
+            "expectedResult": "A large wave of unrelated test failures/crashes (matching this task's own 608/16/139-shaped reproductions), most bearing the signature `Error: Timeout of 1ms exceeded`, vanish once `mocha@11.7.5` is reinstalled in its place (`npm install mocha@11.7.5 --no-save`) with no other change."
+          }
+        }
+      ]
     }
   ]
 }
