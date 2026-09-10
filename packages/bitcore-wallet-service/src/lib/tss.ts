@@ -76,11 +76,11 @@ async function listenForSessionComplete<T extends TssKeyGenModel | TssSigGenMode
   const _session = await fetchSession({ id: session.id });
   if (isComplete(_session)) {
     messageBroker.offMessage(sessionUpdateHandler);
-    clearTimeout(timer);
     session = _session;
   } else {
     session = await sessionUpdate;
   }
+  clearTimeout(timer);
 
   return session;
 }
