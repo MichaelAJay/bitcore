@@ -136,7 +136,7 @@ function createCoinGeckoRequestStub(handlers: {
 describe('CoinGecko integration', function() {
   this.timeout(5000);
   const sandbox = sinon.createSandbox();
-  let server;
+  let server: WalletService;
   let wallet;
   let fakeRequest;
 
@@ -907,7 +907,11 @@ describe('CoinGecko integration', function() {
     });
 
     it('should omit a failed default coin and log a warning', async () => {
-      const warnSpy = sandbox.spy(logger, 'warn');
+      // winston's LeveledLogMethod is overloaded, and TypeScript resolves a bare
+      // reference to an overloaded method (as sandbox.spy needs here) to its last
+      // overload -- `(infoObject: object)` -- even though the real call below uses
+      // the (message, meta) overload, so narrow the view to what's really used.
+      const warnSpy = sandbox.spy(logger as unknown as { warn: (message: string, meta?: any) => any }, 'warn');
 
       // Force global-cache misses so every default coin fetches via HTTP.
       forceGlobalCacheMisses();

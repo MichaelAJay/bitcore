@@ -312,6 +312,7 @@ describe('Wallet', function() {
       await wallet.getClient({ mustExist: true, doNotComplete: true });
       getPasswordStub = sandbox.stub(promptsModule, 'getPassword').callsFake(async function(_, opts) {
         opts.validate(PASSWORD);
+        return PASSWORD;
       });
     });
 

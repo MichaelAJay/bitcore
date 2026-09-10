@@ -8978,7 +8978,9 @@ describe('client API', function() {
 
       const client = new Client();
 
-      const _f = sandbox.stub(client, '_fetchLatestNotifications').callsFake((interval, cb) => {
+      // _fetchLatestNotifications is async, so the fake needs to return a Promise too even though 
+      // _initNotifications' setInterval callback fires it off without awaiting the result.
+      const _f = sandbox.stub(client, '_fetchLatestNotifications').callsFake(async (interval, cb) => {
         cb(new Errors.NOT_FOUND());
       });
 
@@ -8998,7 +9000,7 @@ describe('client API', function() {
 
       const client = new Client();
 
-      const _f = sandbox.stub(client, '_fetchLatestNotifications').callsFake((interval, cb) => {
+      const _f = sandbox.stub(client, '_fetchLatestNotifications').callsFake(async (interval, cb) => {
         cb(new Errors.NOT_AUTHORIZED());
       });
 
