@@ -36,7 +36,7 @@ async function listenForSessionComplete<T extends TssKeyGenModel | TssSigGenMode
 
   const messageBroker = WalletService.getMessageBroker();
   const events = new EventEmitter();
-  const handler = async (message: INotification) => {
+  const sessionUpdateHandler = async (message: INotification) => {
     if (message.type !== messageType) {
       return;
     }
@@ -45,16 +45,15 @@ async function listenForSessionComplete<T extends TssKeyGenModel | TssSigGenMode
     }
     const _session = await fetchSession({ id: session.id });
     if (isComplete(_session)) {
-      messageBroker.unsubscribe(handler);
+      messageBroker.offMessage(sessionUpdateHandler);
+      events.emit('session', _session);
     }
-
-    events.emit('session', _session);
   };
-  messageBroker.onMessage(handler);
+  messageBroker.onMessage(sessionUpdateHandler);
   let timer: NodeJS.Timeout;
   session = await Promise.race([
     new Promise<T>(r => events.once('session', r)),
-    new Promise<T>(r => timer = setTimeout(() => r(session), maxWaitTime))
+    new Promise<T>(r => timer = setTimeout(() => { messageBroker.offMessage(sessionUpdateHandler); r(session); }, maxWaitTime))
   ]);
   clearTimeout(timer);
   return session;
@@ -533,29 +532,13 @@ class TssSignClass {
 
     if (!isRoundComplete(session)) {
       const storage = WalletService.getStorage();
-      const messageBroker = WalletService.getMessageBroker();
-      const events = new EventEmitter();
-      const handler = async (message: INotification) => {
-        if (message.type !== TssSignClass.TSS_SIGGEN_MESSAGE_TYPE) {
-          return;
-        }
-        if (message.id !== session.id) {
-          return;
-        }
-        const _session = await storage.fetchTssSigSession({ id: session.id });
-        if (isRoundComplete(_session)) {
-          messageBroker.unsubscribe(handler);
-        }
-
-        events.emit('session', _session);
-      };
-      messageBroker.onMessage(handler);
-      let timer: NodeJS.Timeout;
-      session = await Promise.race([
-        new Promise<TssSigGenModel>(r => events.once('session', r)),
-        new Promise<TssSigGenModel>(r => timer = setTimeout(() => r(session), maxWaitTime))
-      ]);
-      clearTimeout(timer);
+      session = await listenForSessionComplete<TssSigGenModel>({
+        messageType: TssSignClass.TSS_SIGGEN_MESSAGE_TYPE,
+        session,
+        isComplete: isRoundComplete,
+        fetchSession: storage.fetchTssSigSession.bind(storage),
+        maxWaitTime
+      });
     }
 
     const otherPartyMsgs = session.rounds[round].filter(m => m.fromPartyId != party.partyId);

@@ -104,12 +104,12 @@ describe('MessageBroker', function() {
     });
   });
 
-  describe('#unsubscribe', function() {
+  describe('#offMessage', function() {
     it('should unregister a message handler', function() {
       const mb = new MessageBroker(null);
       const handler = sandbox.stub();
       mb.onMessage(handler);
-      mb.unsubscribe(handler);
+      mb.offMessage(handler);
       mb.emit('msg', { type: 'test' });
       handler.called.should.equal(false);
     });
@@ -127,7 +127,7 @@ describe('MessageBroker', function() {
       mb.listeners('msg').length.should.equal(2);
 
       // Unsubscribe should remove only one instance of the same closure.
-      mb.unsubscribe(handler);
+      mb.offMessage(handler);
       mb.listeners('msg').length.should.equal(1);
 
       mb.emit('msg', { type: 'test' });

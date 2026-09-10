@@ -42,7 +42,7 @@ export class MessageBroker extends EventEmitter {
     this.on('msg', handler);
   }
 
-  unsubscribe(handler: (data: Notification) => void) {
+  offMessage(handler: (data: Notification) => void) {
     this.off('msg', handler);
   }
 }
