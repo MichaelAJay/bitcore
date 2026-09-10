@@ -1,12 +1,12 @@
 'use strict';
 
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const gulp = require('gulp');
 const rename = require('gulp-rename');
 const shell = require('gulp-shell');
 const terser = require('gulp-terser');
-const fs = require('fs');
-const path = require('path');
-const assert = require('assert');
 
 // Locates an installed package's own root directory (the directory holding
 // its package.json) starting from its resolved entry point. Some packages

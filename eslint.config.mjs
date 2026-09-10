@@ -100,6 +100,7 @@ export default defineConfig([
   },
   {
     files: [
+      'packages/bitcore-build/**/*.js',
       'packages/bitcore-lib*/**/*.js',
       'packages/bitcore-p2p*/**/*.js',
       'packages/bitcore-tss/**/*.js',
