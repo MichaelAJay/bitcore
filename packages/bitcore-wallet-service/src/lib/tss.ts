@@ -63,12 +63,25 @@ async function listenForSessionComplete<T extends TssKeyGenModel | TssSigGenMode
     }
   };
   messageBroker.onMessage(sessionUpdateHandler);
+  
+  // Listen for session update events over the message broker service
   let timer: NodeJS.Timeout;
-  session = await Promise.race([
+  const sessionUpdate = Promise.race([
     new Promise<T>(r => events.once('session', r)),
     new Promise<T>(r => timer = setTimeout(() => { messageBroker.offMessage(sessionUpdateHandler); r(session); }, maxWaitTime))
   ]);
-  clearTimeout(timer);
+
+  // Check for an updated session one last time before awaiting the subscription.
+  // This is to prevent a race condition where the update arrives before we start listening for it.
+  const _session = await fetchSession({ id: session.id });
+  if (isComplete(_session)) {
+    messageBroker.offMessage(sessionUpdateHandler);
+    clearTimeout(timer);
+    session = _session;
+  } else {
+    session = await sessionUpdate;
+  }
+
   return session;
 }
 
