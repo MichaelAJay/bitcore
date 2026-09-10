@@ -24,11 +24,19 @@ function getBoundedWaitTime(maxWaitTimeSec?: number, maxSec = 20, minSec = 0): n
   return maxWaitTime;
 }
 
+/**
+ * Common function for listening to the completion of a TSS session's round.
+ */
 async function listenForSessionComplete<T extends TssKeyGenModel | TssSigGenModel>(params: {
+  /** Message type to listen for */
   messageType: typeof TssKeyGenClass.TSS_KEYGEN_MESSAGE_TYPE | typeof TssSignClass.TSS_SIGGEN_MESSAGE_TYPE;
+  /** Session to listen for updates */
   session: T;
+  /** Function to determine if the round is complete */
   isComplete: (session: T) => boolean;
+  /** Function to fetch the latest session state */
   fetchSession: (params: { id: string }) => Promise<T>;
+  /** Maximum time (in milliseconds) to wait for the round to complete */
   maxWaitTime: number;
 }): Promise<T> {
   const { messageType, isComplete, fetchSession, maxWaitTime } = params;
@@ -43,10 +51,15 @@ async function listenForSessionComplete<T extends TssKeyGenModel | TssSigGenMode
     if (message.id !== session.id) {
       return;
     }
-    const _session = await fetchSession({ id: session.id });
-    if (isComplete(_session)) {
-      messageBroker.offMessage(sessionUpdateHandler);
-      events.emit('session', _session);
+    try {
+      const _session = await fetchSession({ id: session.id });
+      if (isComplete(_session)) {
+        messageBroker.offMessage(sessionUpdateHandler);
+        events.emit('session', _session);
+      }
+    } catch (err) {
+      // Do not throw on possibly transient db connection errors. At worst, this runs until the maxWaitTime expires
+      logger.error('Error fetching updated TSS session: %o - %o', session.id, err);
     }
   };
   messageBroker.onMessage(sessionUpdateHandler);
