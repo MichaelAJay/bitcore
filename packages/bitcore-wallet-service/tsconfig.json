@@ -22,7 +22,6 @@
     "types": ["node", "mocha"],
     "baseUrl": ".",
     "paths": {
-      "sinon": ["./types/sinon-shim.d.ts"],
       "*": [
         "*",
         "./src/*"

@@ -85,6 +85,7 @@
     "@types/request": "2.48.13",
     "@types/request-promise-native": "^1.0.15",
     "@types/secp256k1": "^4.0.7",
+    "@types/sinon": "^22.0.0",
     "chai": "^5.2.0",
     "memdown": "^1.0.0",
     "npmlog": "^6.0.2",

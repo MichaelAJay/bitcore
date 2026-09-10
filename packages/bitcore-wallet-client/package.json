@@ -46,6 +46,7 @@
     "@types/chai": "^5.2.2",
     "@types/mocha": "^5.2.0",
     "@types/node": "22.14.1",
+    "@types/sinon": "^22.0.0",
     "browserify": "^13.1.0",
     "chai": "^5.2.0",
     "mongodb": "^3.5.9",
