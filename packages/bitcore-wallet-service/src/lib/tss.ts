@@ -14,7 +14,7 @@ import type { ITssSigMessageObject } from './model/tsssign';
 /**
  * Get a bounded wait time in milliseconds for TSS message retrieval. The wait time is bounded between 0 and 20 seconds.
  * If no maxWaitTimeSec is provided, the default is maxSec seconds (default: 20).
- * @param {number} maxWaitTimeSec The the value to be bounded
+ * @param {number} maxWaitTimeSec The value to be bounded
  * @param {number} maxSec The maximum wait time in seconds (default: 20)
  * @param {number} minSec The minimum wait time in seconds (default: 0)
  */
