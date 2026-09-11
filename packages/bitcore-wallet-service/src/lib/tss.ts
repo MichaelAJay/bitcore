@@ -1,4 +1,3 @@
-import { EventEmitter } from 'events';
 import { BitcoreLib } from '@bitpay-labs/crypto-wallet-core';
 import { Constants } from './common/constants';
 import { Errors } from './errors/errordefinitions';
@@ -80,47 +79,62 @@ async function listenForSessionComplete<T extends TssKeyGenModel | TssSigGenMode
   fetchSession: (params: { id: string }) => Promise<T>;
   /** Maximum time (in milliseconds) to wait for the round to complete */
   maxWaitTime: number;
+  /** Cancel an abandoned HTTP poll without waiting for another message or the deadline. */
+  signal?: AbortSignal;
 }): Promise<T> {
-  const { messageType, isComplete, fetchSession, maxWaitTime } = params;
-  let { session } = params;
+  const { messageType, session, isComplete, fetchSession, maxWaitTime, signal } = params;
+  if (signal?.aborted) return session;
 
-  const events = new EventEmitter();
-  const sessionUpdateHandler = async () => {
-    try {
-      const _session = await fetchSession({ id: session.id });
-      if (isComplete(_session)) {
-        unsubscribe();
-        events.emit('session', _session);
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    let timer: NodeJS.Timeout;
+    let unsubscribe = () => {};
+    const cleanup = () => {
+      settled = true;
+      unsubscribe();
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    };
+    const finish = (updatedSession: T) => {
+      if (settled) return;
+      cleanup();
+      resolve(updatedSession);
+    };
+    const onAbort = () => finish(session);
+    const checkSession = async (initialCheck = false) => {
+      if (settled) return;
+      try {
+        const updatedSession = await fetchSession({ id: session.id });
+        // Unsubscribing cannot cancel a database read already in flight. Ignore its late
+        // result after timeout/disconnect; it must not revive or change a completed poll.
+        if (!settled && isComplete(updatedSession)) finish(updatedSession);
+      } catch (err) {
+        if (settled) return;
+        if (initialCheck) {
+          cleanup();
+          reject(err);
+        } else {
+          // A transient notification read failure can recover on a later update.
+          logger.error('Error fetching updated TSS session: %o - %o', session.id, err);
+        }
       }
-    } catch (err) {
-      // Do not throw on possibly transient db connection errors. At worst, this runs until the maxWaitTime expires
-      logger.error('Error fetching updated TSS session: %o - %o', session.id, err);
-    }
-  };
-  const unsubscribe = subscribeToSession(messageType, session.id, sessionUpdateHandler);
-  
-  // Listen for session update events over the message broker service
-  let timer: NodeJS.Timeout;
-  const sessionUpdate = Promise.race([
-    new Promise<T>(r => events.once('session', r)),
-    new Promise<T>(r => timer = setTimeout(() => { unsubscribe(); r(session); }, maxWaitTime))
-  ]);
+    };
 
-  try {
-    // Check for an updated session one last time before awaiting the subscription.
-    // This is to prevent a race condition where the update arrives before we start listening for it.
-    const _session = await fetchSession({ id: session.id });
-    if (isComplete(_session)) {
-      session = _session;
-    } else {
-      session = await sessionUpdate;
+    try {
+      unsubscribe = subscribeToSession(messageType, session.id, () => checkSession());
+      signal?.addEventListener('abort', onAbort, { once: true });
+      timer = setTimeout(() => finish(session), maxWaitTime);
+
+      // Subscribe before rechecking so an update between the original read and this
+      // subscription cannot be missed. Do not await the recheck here: the deadline and
+      // cancellation must settle the poll even if that database read never settles.
+      // This bounds the poll's lifetime, not the underlying driver's database operation.
+      void checkSession(true);
+    } catch (err) {
+      cleanup();
+      reject(err);
     }
-    return session;
-  } finally {
-    unsubscribe();
-    clearTimeout(timer);
-    events.removeAllListeners();
-  }
+  });
 }
 
 class TssKeyGenClass {
@@ -164,6 +178,8 @@ class TssKeyGenClass {
     copayerId: string;
     /** Maximum time (in seconds) to wait for a complete round */
     maxWaitTimeSec?: number;
+    /** Stop listening when the requesting client disconnects. */
+    signal?: AbortSignal;
   }): Promise<{
     messages?: ITssKeyMessageObject[];
     publicKey?: string;
@@ -194,7 +210,8 @@ class TssKeyGenClass {
         session,
         isComplete: isRoundComplete,
         fetchSession: storage.fetchTssKeyGenSession.bind(storage),
-        maxWaitTime
+        maxWaitTime,
+        signal: params.signal
       });
     }
 
@@ -575,6 +592,8 @@ class TssSignClass {
     copayerId: string;
     /** Maximum time (in seconds) to wait for a complete round */
     maxWaitTimeSec?: number;
+    /** Stop listening when the requesting client disconnects. */
+    signal?: AbortSignal;
   }): Promise<{ messages?: ITssSigMessageObject[]; signature?: ITssSigMessageObject['signature']; participants?: string[] }> {
     const { round, copayerId } = params;
     let { session } = params;
@@ -601,7 +620,8 @@ class TssSignClass {
         session,
         isComplete: isRoundComplete,
         fetchSession: storage.fetchTssSigSession.bind(storage),
-        maxWaitTime
+        maxWaitTime,
+        signal: params.signal
       });
     }
 

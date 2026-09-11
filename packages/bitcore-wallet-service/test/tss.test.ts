@@ -162,4 +162,73 @@ describe('TSS session subscriptions', function() {
     expect(fetchSession.called).to.equal(false);
   });
 
+  for (const type of ['keygen', 'sign']) {
+    describe(`${type} cancellation and deadlines`, function() {
+      let fetch: sinon.SinonStub;
+      let start: (signal?: AbortSignal) => Promise<unknown>;
+
+      beforeEach(function() {
+        if (type === 'keygen') {
+          fetch = fetchSession;
+          start = signal => TssKeyGen.getMessagesForParty({ session, round: 0, copayerId: 'alice', maxWaitTimeSec: 1, signal });
+        } else {
+          const signingSession = Object.assign(new TssSigGenModel(), {
+            id: session.id, m: 2, participants: [{ partyId: 0, copayerId: 'alice' }], rounds: [[]]
+          });
+          fetch = sandbox.stub(storage, 'fetchTssSigSession').resolves(signingSession);
+          start = signal => TssSign.getMessagesForParty({ session: signingSession, round: 0, copayerId: 'alice', maxWaitTimeSec: 1, signal });
+        }
+      });
+
+      function expectUnsubscribed() {
+        fetch.resetHistory();
+        broker.emit('msg', { type: type === 'keygen' ? 'TssKeyGenMessage' : 'TssSigMessage', id: session.id });
+        expect(fetch.called).to.equal(false);
+        expect(clock.countTimers()).to.equal(0);
+      }
+
+      it('settles at the deadline even when the database recheck is stalled', async function() {
+        let rejectRead: (err: Error) => void;
+        fetch.returns(new Promise((resolve, reject) => { rejectRead = reject; }));
+        const pending = start();
+        clock.tick(1000);
+        await pending;
+        expectUnsubscribed();
+        // A late driver rejection must remain handled after the poll has returned.
+        rejectRead(new Error('late database failure'));
+        await Promise.resolve();
+      });
+
+      it('cancels a stalled recheck and removes the abort listener', async function() {
+        const controller = new AbortController();
+        const removeListener = sandbox.spy(controller.signal, 'removeEventListener');
+        fetch.returns(new Promise(() => {}));
+        const pending = start(controller.signal);
+        controller.abort();
+        await pending;
+        expect(removeListener.calledOnce).to.equal(true);
+        expectUnsubscribed();
+      });
+
+      it('does not start a database recheck for an already aborted poll', async function() {
+        const controller = new AbortController();
+        controller.abort();
+        await start(controller.signal);
+        expect(fetch.called).to.equal(false);
+        expectUnsubscribed();
+      });
+
+      it('releases the abort listener on timeout without aborting the signal', async function() {
+        const controller = new AbortController();
+        const removeListener = sandbox.spy(controller.signal, 'removeEventListener');
+        const pending = start(controller.signal);
+        clock.tick(1000);
+        await pending;
+        expect(removeListener.calledOnce).to.equal(true);
+        expect(controller.signal.aborted).to.equal(false);
+        expectUnsubscribed();
+      });
+    });
+  }
+
 });

@@ -38,12 +38,23 @@ export class TssRouter {
 
     router.get('/v1/tss/keygen/:id/:round', authTssRequest(), async function(req, res) {
       let interval: NodeJS.Timeout;
+      const controller = new AbortController();
+      const onClose = () => {
+        clearInterval(interval);
+        // Stopping heartbeats alone leaves the broker subscription and poll timeout alive.
+        controller.abort();
+      };
+      // IncomingMessage.close describes completion of the request, not the response.
+      // Register before the first await so disconnects during validation are not missed.
+      res.once('close', onClose);
       try {
+        if (res.destroyed) return;
         const { id, round } = req.params as { [key: string]: string };
         const { maxWaitTime } = req.query as { [key: string]: string };
         const copayerId = req.headers['x-identity'];
         if (round === 'secret') {
           const secret = await TssKeyGen.getBwsJoinSecret({ id, copayerId });
+          if (res.destroyed || controller.signal.aborted) return;
           return res.json({ secret });
         }
 
@@ -51,20 +62,26 @@ export class TssRouter {
         //   "session not found" or "not a participant" can still be returned with a proper
         //   HTTP status instead of silently becoming an empty 200 (see below).
         const session = await TssKeyGen.getSessionForCopayer({ id, copayerId });
+        // The response may have closed while the database lookup was pending. Do not
+        // start a heartbeat or subscription for a client that has already gone away.
+        if (res.destroyed || controller.signal.aborted) return;
 
-        // Keep the connection alive while waiting for the change stream to return a result.
+        // Keep the connection alive while waiting for a session update.
         // Headers must be finalized before writing the first heartbeat byte.
         // Flush ensures the heartbeat is sent immediately to keep the connection alive.
         res.writeHead(200, { 'Content-Type': 'application/json' });
         interval = setInterval(() => { res.write('\n'); res.flush(); }, 1000);
-        req.on('close', () => clearInterval(interval));
 
-        const { messages, publicKey } = await TssKeyGen.getMessagesForParty({ session, round: parseInt(round), copayerId, maxWaitTimeSec: parseInt(maxWaitTime) });
+        const { messages, publicKey } = await TssKeyGen.getMessagesForParty({ session, round: parseInt(round), copayerId, maxWaitTimeSec: parseInt(maxWaitTime), signal: controller.signal });
+        if (res.destroyed || controller.signal.aborted) return;
         return res.end(JSON.stringify({ messages, publicKey }));
       } catch (err) {
+        if (res.destroyed || controller.signal.aborted) return;
         return returnError(err ?? 'unknown', res, req);
       } finally {
         clearInterval(interval);
+        // Normal completion and failures also release our response listener.
+        res.removeListener('close', onClose);
       }
     });
 
@@ -122,7 +139,17 @@ export class TssRouter {
 
     router.get('/v1/tss/sign/:id/:round', authTssRequest(), async function(req, res) {
       let interval: NodeJS.Timeout;
+      const controller = new AbortController();
+      const onClose = () => {
+        clearInterval(interval);
+        // Stopping heartbeats alone leaves the broker subscription and poll timeout alive.
+        controller.abort();
+      };
+      // IncomingMessage.close describes completion of the request, not the response.
+      // Register before the first await so disconnects during validation are not missed.
+      res.once('close', onClose);
       try {
+        if (res.destroyed) return;
         const { id, round } = req.params as { [key: string]: string };
         const { maxWaitTime } = req.query as { [key: string]: string };
         const copayerId = req.headers['x-identity'];
@@ -131,21 +158,26 @@ export class TssRouter {
         //   "session not found" or "not a participant" can still be returned with a proper
         //   HTTP status instead of silently becoming an empty 200 (see below).
         const session = await TssSign.getSessionForCopayer({ id, copayerId });
+        // The response may have closed while the database lookup was pending. Do not
+        // start a heartbeat or subscription for a client that has already gone away.
+        if (res.destroyed || controller.signal.aborted) return;
 
-        // Keep the connection alive while waiting for the change stream to return a result.
+        // Keep the connection alive while waiting for a session update.
         // Headers must be finalized before writing the first heartbeat byte.
         // Flush ensures the heartbeat is sent immediately to keep the connection alive.
         res.writeHead(200, { 'Content-Type': 'application/json' });
         interval = setInterval(() => { res.write('\n'); res.flush(); }, 1000);
-        req.on('close', () => clearInterval(interval));
 
-        const { messages, signature, participants } = await TssSign.getMessagesForParty({ session, round: parseInt(round), copayerId, maxWaitTimeSec: parseInt(maxWaitTime) });
-        clearInterval(interval);
+        const { messages, signature, participants } = await TssSign.getMessagesForParty({ session, round: parseInt(round), copayerId, maxWaitTimeSec: parseInt(maxWaitTime), signal: controller.signal });
+        if (res.destroyed || controller.signal.aborted) return;
         return res.end(JSON.stringify({ messages, signature, participants }));
       } catch (err) {
+        if (res.destroyed || controller.signal.aborted) return;
         return returnError(err ?? 'unknown', res, req);
       } finally {
         clearInterval(interval);
+        // Normal completion and failures also release our response listener.
+        res.removeListener('close', onClose);
       }
     });
 
