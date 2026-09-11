@@ -11,6 +11,48 @@ import type { INotification } from './model/notification';
 import type { ITssKeyMessageObject } from './model/tsskeygen';
 import type { ITssSigMessageObject } from './model/tsssign';
 
+type SessionHandler = (message: INotification) => Promise<void>;
+
+const sessionRegistry = new Map<string, Set<SessionHandler>>();
+let dispatcherRegistered = false;
+
+function sessionKey(type: string, id: string | number): string {
+  return JSON.stringify([type, id]);
+}
+
+function dispatchSessionMessage(message: INotification): void {
+  const handlers = sessionRegistry.get(sessionKey(message.type, message.id));
+  for (const notify of [...(handlers ?? [])]) {
+    void notify(message).catch(err => {
+      logger.error('Error handling TSS session update: %o', err);
+    });
+  }
+}
+
+function subscribeToSession(type: string, id: string, handler: SessionHandler): () => void {
+  if (!dispatcherRegistered) {
+    WalletService.getMessageBroker().onMessage(dispatchSessionMessage);
+    dispatcherRegistered = true;
+  }
+
+  const key = sessionKey(type, id);
+  let handlers = sessionRegistry.get(key);
+  if (!handlers) {
+    handlers = new Set();
+    sessionRegistry.set(key, handlers);
+  }
+  handlers.add(handler);
+
+  return () => {
+    if (!handlers.delete(handler)) {
+      return;
+    }
+    if (handlers.size === 0) {
+      sessionRegistry.delete(key);
+    }
+  };
+}
+
 /**
  * Get a bounded wait time in milliseconds for TSS message retrieval. The wait time is bounded between 0 and 20 seconds.
  * If no maxWaitTimeSec is provided, the default is maxSec seconds (default: 20).
@@ -42,19 +84,12 @@ async function listenForSessionComplete<T extends TssKeyGenModel | TssSigGenMode
   const { messageType, isComplete, fetchSession, maxWaitTime } = params;
   let { session } = params;
 
-  const messageBroker = WalletService.getMessageBroker();
   const events = new EventEmitter();
-  const sessionUpdateHandler = async (message: INotification) => {
-    if (message.type !== messageType) {
-      return;
-    }
-    if (message.id !== session.id) {
-      return;
-    }
+  const sessionUpdateHandler = async () => {
     try {
       const _session = await fetchSession({ id: session.id });
       if (isComplete(_session)) {
-        messageBroker.offMessage(sessionUpdateHandler);
+        unsubscribe();
         events.emit('session', _session);
       }
     } catch (err) {
@@ -62,27 +97,30 @@ async function listenForSessionComplete<T extends TssKeyGenModel | TssSigGenMode
       logger.error('Error fetching updated TSS session: %o - %o', session.id, err);
     }
   };
-  messageBroker.onMessage(sessionUpdateHandler);
+  const unsubscribe = subscribeToSession(messageType, session.id, sessionUpdateHandler);
   
   // Listen for session update events over the message broker service
   let timer: NodeJS.Timeout;
   const sessionUpdate = Promise.race([
     new Promise<T>(r => events.once('session', r)),
-    new Promise<T>(r => timer = setTimeout(() => { messageBroker.offMessage(sessionUpdateHandler); r(session); }, maxWaitTime))
+    new Promise<T>(r => timer = setTimeout(() => { unsubscribe(); r(session); }, maxWaitTime))
   ]);
 
-  // Check for an updated session one last time before awaiting the subscription.
-  // This is to prevent a race condition where the update arrives before we start listening for it.
-  const _session = await fetchSession({ id: session.id });
-  if (isComplete(_session)) {
-    messageBroker.offMessage(sessionUpdateHandler);
-    session = _session;
-  } else {
-    session = await sessionUpdate;
+  try {
+    // Check for an updated session one last time before awaiting the subscription.
+    // This is to prevent a race condition where the update arrives before we start listening for it.
+    const _session = await fetchSession({ id: session.id });
+    if (isComplete(_session)) {
+      session = _session;
+    } else {
+      session = await sessionUpdate;
+    }
+    return session;
+  } finally {
+    unsubscribe();
+    clearTimeout(timer);
+    events.removeAllListeners();
   }
-  clearTimeout(timer);
-
-  return session;
 }
 
 class TssKeyGenClass {
