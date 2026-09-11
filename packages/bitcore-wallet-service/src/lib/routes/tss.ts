@@ -54,8 +54,9 @@ export class TssRouter {
 
         // Keep the connection alive while waiting for the change stream to return a result.
         // Headers must be finalized before writing the first heartbeat byte.
+        // Flush ensures the heartbeat is sent immediately to keep the connection alive.
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        interval = setInterval(() => res.write('\n'), 1000);
+        interval = setInterval(() => { res.write('\n'); res.flush(); }, 1000);
         req.on('close', () => clearInterval(interval));
 
         const { messages, publicKey } = await TssKeyGen.getMessagesForParty({ session, round: parseInt(round), copayerId, maxWaitTimeSec: parseInt(maxWaitTime) });
@@ -133,8 +134,9 @@ export class TssRouter {
 
         // Keep the connection alive while waiting for the change stream to return a result.
         // Headers must be finalized before writing the first heartbeat byte.
+        // Flush ensures the heartbeat is sent immediately to keep the connection alive.
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        interval = setInterval(() => res.write('\n'), 1000);
+        interval = setInterval(() => { res.write('\n'); res.flush(); }, 1000);
         req.on('close', () => clearInterval(interval));
 
         const { messages, signature, participants } = await TssSign.getMessagesForParty({ session, round: parseInt(round), copayerId, maxWaitTimeSec: parseInt(maxWaitTime) });
