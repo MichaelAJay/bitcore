@@ -12,6 +12,7 @@ import {
 import request from 'supertest';
 import crypto from 'crypto';
 import fs from 'fs';
+import http from 'http';
 import path from 'path';
 import { ECIES, utils as TssUtils } from '@bitpay-labs/bitcore-tss';
 import { Request } from '../src/lib/request';
@@ -38,7 +39,12 @@ describe('TSS', function() {
   let db;
   let storage;
   let dbConnection;
-  let app;
+  // Every request goes through one persistent server instead of `request(expressApp)`. Handed a bare express app,
+  // supertest opens a new server with listen(0) for each request, and a wildcard listen(0) can be given a port that
+  // another local process already holds on 127.0.0.1 (IDE helper processes do). The request then reaches that process
+  // rather than this app: it hangs, or fails with a foreign 400/404 body. This server binds 127.0.0.1 explicitly, which
+  // the OS never pairs with a port already held there, and picks its port once.
+  let server: http.Server;
   const sandbox = sinon.createSandbox();
   const chain = 'ETH';
   const network = 'livenet';
@@ -63,14 +69,13 @@ describe('TSS', function() {
           doNotCheckV8: true
         },
         () => {
-          app = expressApp.app;
-
           if (!process.env.BWC_SHOW_LOGS) {
             sandbox.stub(log, 'warn');
             sandbox.stub(log, 'info');
             sandbox.stub(log, 'error');
           }
-          done();
+          server = http.createServer(expressApp.app);
+          server.listen(0, '127.0.0.1', done);
         }
       );
     });
@@ -88,7 +93,9 @@ describe('TSS', function() {
   });
 
   after(function(done) {
-    dbConnection.close(done);
+    // A subscription that outlives its test may still hold a connection open, which would stall close()
+    server.closeAllConnections();
+    server.close(() => dbConnection.close(done));
   });
 
   afterEach(function() {
@@ -116,7 +123,7 @@ describe('TSS', function() {
         chain,
         network,
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         key: party0Key
       });
       should.exist(tss0);
@@ -185,7 +192,7 @@ describe('TSS', function() {
           chain,
           network,
           baseUrl: '/bws/api',
-          request: request(app),
+          request: request(server),
           key: party2Key
         });
         // party2 should not be able to use party1's join code
@@ -202,7 +209,7 @@ describe('TSS', function() {
         chain,
         network,
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         key: party1Key
       });
       let result = await tss1.joinKey({ code: joinCode1 });
@@ -218,7 +225,7 @@ describe('TSS', function() {
         chain,
         network,
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         key: party2Key
       });
       result = await tss2.joinKey({ code: joinCode2 });
@@ -284,7 +291,7 @@ describe('TSS', function() {
         chain,
         network,
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         key: party0Key
       }).restoreSession({ session: s0 });
 
@@ -292,7 +299,7 @@ describe('TSS', function() {
         chain,
         network,
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         key: party1Key
       }).restoreSession({ session: s1 });
       
@@ -300,7 +307,7 @@ describe('TSS', function() {
         chain,
         network,
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         key: party2Key
       }).restoreSession({ session: s2 });
     });
@@ -447,21 +454,21 @@ describe('TSS', function() {
           chain,
           network,
           baseUrl: '/bws/api',
-          request: request(app),
+          request: request(server),
           key: party0Key
         });
         const tss1 = new TssKeyGen({
           chain,
           network,
           baseUrl: '/bws/api',
-          request: request(app),
+          request: request(server),
           key: party1Key
         });
         const tss2 = new TssKeyGen({
           chain,
           network,
           baseUrl: '/bws/api',
-          request: request(app),
+          request: request(server),
           key: party2Key
         });
         await tss0.newKey({ m, n, password });
@@ -474,7 +481,7 @@ describe('TSS', function() {
           chain,
           network,
           baseUrl: '/bws/api',
-          request: request(app),
+          request: request(server),
           key: party0Key
         });
         const result = await tss0.newKey({ m, n, password });
@@ -586,21 +593,21 @@ describe('TSS', function() {
           chain,
           network,
           baseUrl: '/bws/api',
-          request: request(app),
+          request: request(server),
           key: party0Key
         });
         tss1 = new TssKeyGen({
           chain,
           network,
           baseUrl: '/bws/api',
-          request: request(app),
+          request: request(server),
           key: party1Key
         });
         tss2 = new TssKeyGen({
           chain,
           network,
           baseUrl: '/bws/api',
-          request: request(app),
+          request: request(server),
           key: party2Key
         });
         await tss0.newKey({ m, n });
@@ -681,7 +688,7 @@ describe('TSS', function() {
           sharedPublicKey: party0TssKey.keychain.commonKeyChain,
         }
       });
-      const client = helpers.newClient(app);
+      const client = helpers.newClient(server);
       for (const tssKey of [party0TssKey, party1TssKey, party2TssKey]) {
         await helpers.createAndJoinWallet(
           [client, client, client],
@@ -700,7 +707,7 @@ describe('TSS', function() {
     it(happyPath('should start a new signing session'), async function() {
       sig1 = new TssSign({
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         credentials: party1Creds,
         tssKey: party1TssKey,
       });
@@ -715,7 +722,7 @@ describe('TSS', function() {
     it(happyPath('should join a signing session'), async function() {
       sig0 = new TssSign({
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         credentials: party0Creds,
         tssKey: party0TssKey,
       });
@@ -728,8 +735,8 @@ describe('TSS', function() {
 
     it(happyPath('should emit copayerReady for self on start() and for remote on subscribe()'), async function() {
       const copayerReadyIds: string[] = [];
-      const sigA = new TssSign({ baseUrl: '/bws/api', request: request(app), credentials: party0Creds, tssKey: party0TssKey });
-      const sigB = new TssSign({ baseUrl: '/bws/api', request: request(app), credentials: party1Creds, tssKey: party1TssKey });
+      const sigA = new TssSign({ baseUrl: '/bws/api', request: request(server), credentials: party0Creds, tssKey: party0TssKey });
+      const sigB = new TssSign({ baseUrl: '/bws/api', request: request(server), credentials: party1Creds, tssKey: party1TssKey });
       sigA.on('copayerReady', (id) => copayerReadyIds.push(id));
       await sigA.start({ id: 'copayer-ready-test', messageHash, derivationPath });
       copayerReadyIds.should.deep.equal([party0Creds.copayerId]);
@@ -745,7 +752,7 @@ describe('TSS', function() {
     it('should reject too many participants', async function() {
       const sig2 = new TssSign({
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         credentials: party2Creds,
         tssKey: party2TssKey,
       });
@@ -783,14 +790,14 @@ describe('TSS', function() {
 
       sig0 = await new TssSign({
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         credentials: party0Creds,
         tssKey: party0TssKey,
       }).restoreSession({ session: export0 });
 
       sig1 = await new TssSign({
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         credentials: party1Creds,
         tssKey: party1TssKey,
       }).restoreSession({ session: export1 });
@@ -815,7 +822,7 @@ describe('TSS', function() {
     it('should error for a duplicate round message', async function() {
       const sig0 = await new TssSign({
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         credentials: party0Creds,
         tssKey: party0TssKey,
       }).restoreSession({ session: export0 });
@@ -830,6 +837,8 @@ describe('TSS', function() {
       emitSpy.args[3][0].should.equal('error');
       emitSpy.args[3][1].should.equal(e);
       e.message.should.include('TSS_ROUND_ALREADY_DONE');
+      // An error does not stop a subscription, and this error repeats every iteration; without this it keeps polling
+      sig0.unsubscribe();
     });
 
     it('should roll back an encrypted signing session without masking the original error', async function() {
@@ -841,7 +850,7 @@ describe('TSS', function() {
 
         const encryptedSig = await new TssSign({
           baseUrl: '/bws/api',
-          request: request(app),
+          request: request(server),
           credentials: party0Creds,
           tssKey: party0TssKey,
         }).restoreSession({ session: export0, password });
@@ -940,7 +949,7 @@ describe('TSS', function() {
     it('should emit the signature for an outdated local but finished remote session', async function() {
       const sig0 = await new TssSign({
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         credentials: party0Creds,
         tssKey: party0TssKey,
       }).restoreSession({ session: export0 });
@@ -959,13 +968,13 @@ describe('TSS', function() {
     it('should sign a message with a custom id', async function() {
       const sig0 = new TssSign({
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         credentials: party0Creds,
         tssKey: party0TssKey,
       });
       const sig2 = new TssSign({
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         credentials: party2Creds,
         tssKey: party2TssKey,
       });
@@ -984,7 +993,7 @@ describe('TSS', function() {
     it('should error on a duplicate session id', async function() {
       const sig0 = new TssSign({
         baseUrl: '/bws/api',
-        request: request(app),
+        request: request(server),
         credentials: party0Creds,
         tssKey: party0TssKey,
       });
@@ -1107,7 +1116,7 @@ describe('TSS', function() {
       it('should reject a too-old client version', async function() {
         stubPostVersion(0.9);
         const key = new Key({ seedType: 'new' });
-        const tss = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(app), key });
+        const tss = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(server), key });
         try {
           await tss.newKey({ m, n });
           throw new Error('Should have thrown');
@@ -1119,7 +1128,7 @@ describe('TSS', function() {
       it('should reject a too-new client version', async function() {
         stubPostVersion(2.0);
         const key = new Key({ seedType: 'new' });
-        const tss = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(app), key });
+        const tss = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(server), key });
         try {
           await tss.newKey({ m, n });
           throw new Error('Should have thrown');
@@ -1133,7 +1142,7 @@ describe('TSS', function() {
         // Pre-v1.1 clients did not send the version; the server defaults to 1.0
         stubPostVersion(undefined);
         const key = new Key({ seedType: 'new' });
-        const tss = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(app), key });
+        const tss = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(server), key });
         const result = await tss.newKey({ m, n });
         should.exist(result);
         result.should.equal(tss);
@@ -1143,7 +1152,7 @@ describe('TSS', function() {
         // Party 0 creates with current version (1.1); party 1 tries to join with old version (1.0)
         const party0Key = new Key({ seedType: 'new' });
         const party1Key = new Key({ seedType: 'new' });
-        const tss0 = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(app), key: party0Key });
+        const tss0 = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(server), key: party0Key });
         await tss0.newKey({ m, n }); // real version, creates session with schemeVersion 1.1
 
         const joinCode = tss0.createJoinCode({
@@ -1152,7 +1161,7 @@ describe('TSS', function() {
         });
 
         stubPostVersion(1.0);
-        const tss1 = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(app), key: party1Key });
+        const tss1 = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(server), key: party1Key });
         try {
           await tss1.joinKey({ code: joinCode });
           throw new Error('Should have thrown');
@@ -1200,7 +1209,7 @@ describe('TSS', function() {
             }
           });
         
-          const client = helpers.newClient(app);
+          const client = helpers.newClient(server);
           for (const tssKey of [vParty0TssKey, vParty1TssKey]) {
             await helpers.createAndJoinWallet(
               [client, client, client],
@@ -1219,7 +1228,7 @@ describe('TSS', function() {
 
       it('should reject a too-old client version', async function() {
         stubPostVersion(0.9);
-        const sig = new TssSign({ baseUrl: '/bws/api', request: request(app), credentials: vParty0Creds, tssKey: vParty0TssKey });
+        const sig = new TssSign({ baseUrl: '/bws/api', request: request(server), credentials: vParty0Creds, tssKey: vParty0TssKey });
         try {
           await sig.start({ id: 'version-old-sign', messageHash: vMessageHash, derivationPath: vDerivPath });
           throw new Error('Should have thrown');
@@ -1230,7 +1239,7 @@ describe('TSS', function() {
 
       it('should reject a too-new client version', async function() {
         stubPostVersion(2.0);
-        const sig = new TssSign({ baseUrl: '/bws/api', request: request(app), credentials: vParty0Creds, tssKey: vParty0TssKey });
+        const sig = new TssSign({ baseUrl: '/bws/api', request: request(server), credentials: vParty0Creds, tssKey: vParty0TssKey });
         try {
           await sig.start({ id: 'version-new-sign', messageHash: vMessageHash, derivationPath: vDerivPath });
           throw new Error('Should have thrown');
@@ -1243,8 +1252,8 @@ describe('TSS', function() {
       it('should accept a legacy client that omits the version field', async function() {
         // Pre-v1.1 clients did not send the version; the server defaults to 1.0
         stubPostVersion(undefined);
-        const sig0 = new TssSign({ baseUrl: '/bws/api', request: request(app), credentials: vParty0Creds, tssKey: vParty0TssKey });
-        const sig1 = new TssSign({ baseUrl: '/bws/api', request: request(app), credentials: vParty1Creds, tssKey: vParty1TssKey });
+        const sig0 = new TssSign({ baseUrl: '/bws/api', request: request(server), credentials: vParty0Creds, tssKey: vParty0TssKey });
+        const sig1 = new TssSign({ baseUrl: '/bws/api', request: request(server), credentials: vParty1Creds, tssKey: vParty1TssKey });
         await sig0.start({ id: 'version-legacy-sign', messageHash: vMessageHash, derivationPath: vDerivPath });
         await sig1.start({ id: 'version-legacy-sign', messageHash: vMessageHash, derivationPath: vDerivPath });
         // No error: server treats missing version as 1.0, both sessions match
@@ -1252,11 +1261,11 @@ describe('TSS', function() {
 
       it('should reject a version mismatch when joining a signing session', async function() {
         // Party 0 creates with current version (1.1); party 1 tries to join with old version (1.0)
-        const sig0 = new TssSign({ baseUrl: '/bws/api', request: request(app), credentials: vParty0Creds, tssKey: vParty0TssKey });
+        const sig0 = new TssSign({ baseUrl: '/bws/api', request: request(server), credentials: vParty0Creds, tssKey: vParty0TssKey });
         await sig0.start({ id: 'version-mismatch-sign', messageHash: vMessageHash, derivationPath: vDerivPath });
 
         stubPostVersion(1.0);
-        const sig1 = new TssSign({ baseUrl: '/bws/api', request: request(app), credentials: vParty1Creds, tssKey: vParty1TssKey });
+        const sig1 = new TssSign({ baseUrl: '/bws/api', request: request(server), credentials: vParty1Creds, tssKey: vParty1TssKey });
         try {
           await sig1.start({ id: 'version-mismatch-sign', messageHash: vMessageHash, derivationPath: vDerivPath });
           throw new Error('Should have thrown');
@@ -1287,9 +1296,9 @@ describe('TSS', function() {
         const key0 = new Key({ seedType: 'mnemonic', seedData: data.party0Mnemonic });
         const key1 = new Key({ seedType: 'mnemonic', seedData: data.party1Mnemonic });
         const key2 = new Key({ seedType: 'mnemonic', seedData: data.party2Mnemonic });
-        tss0 = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(app), key: key0 });
-        tss1 = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(app), key: key1 });
-        tss2 = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(app), key: key2 });
+        tss0 = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(server), key: key0 });
+        tss1 = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(server), key: key1 });
+        tss2 = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(server), key: key2 });
         await tss0.restoreSession({ session: data.party0Session });
         await tss1.restoreSession({ session: data.party1Session });
         await tss2.restoreSession({ session: data.party2Session });
@@ -1314,7 +1323,7 @@ describe('TSS', function() {
 
       it('should not expire a session before the time limit is reached', async function() {
         const key = new Key({ seedType: 'new' });
-        const tss = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(app), key });
+        const tss = new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(server), key });
         await tss.newKey({ m, n });
 
         simulateExpiry(BwsDefaults.TSS_KEYGEN_TIME_LIMIT - 1); // 1 minute before the default limit
@@ -1359,7 +1368,7 @@ describe('TSS', function() {
               sharedPublicKey: eParty0TssKey.keychain.commonKeyChain,
             }
           });
-          const client = helpers.newClient(app);
+          const client = helpers.newClient(server);
           for (const tssKey of [eParty0TssKey, eParty1TssKey]) {
             await helpers.createAndJoinWallet(
               [client, client, client],
@@ -1373,8 +1382,8 @@ describe('TSS', function() {
       });
 
       it('should emit an error when subscribing to an expired signing session', async function() {
-        const sig0 = new TssSign({ baseUrl: '/bws/api', request: request(app), credentials: eParty0Creds, tssKey: eParty0TssKey });
-        const sig1 = new TssSign({ baseUrl: '/bws/api', request: request(app), credentials: eParty1Creds, tssKey: eParty1TssKey });
+        const sig0 = new TssSign({ baseUrl: '/bws/api', request: request(server), credentials: eParty0Creds, tssKey: eParty0TssKey });
+        const sig1 = new TssSign({ baseUrl: '/bws/api', request: request(server), credentials: eParty1Creds, tssKey: eParty1TssKey });
         await sig0.start({ id: 'expiry-sign', messageHash: eMessageHash, derivationPath: eDerivPath });
         await sig1.start({ id: 'expiry-sign', messageHash: eMessageHash, derivationPath: eDerivPath });
 
@@ -1387,8 +1396,8 @@ describe('TSS', function() {
       });
 
       it('should not expire a signing session before the time limit is reached', async function() {
-        const sig0 = new TssSign({ baseUrl: '/bws/api', request: request(app), credentials: eParty0Creds, tssKey: eParty0TssKey });
-        const sig1 = new TssSign({ baseUrl: '/bws/api', request: request(app), credentials: eParty1Creds, tssKey: eParty1TssKey });
+        const sig0 = new TssSign({ baseUrl: '/bws/api', request: request(server), credentials: eParty0Creds, tssKey: eParty0TssKey });
+        const sig1 = new TssSign({ baseUrl: '/bws/api', request: request(server), credentials: eParty1Creds, tssKey: eParty1TssKey });
         await sig0.start({ id: 'expiry-sign-valid', messageHash: eMessageHash, derivationPath: eDerivPath });
         await sig1.start({ id: 'expiry-sign-valid', messageHash: eMessageHash, derivationPath: eDerivPath });
 
@@ -1408,7 +1417,7 @@ describe('TSS', function() {
     });
   });
   describe('Invitation delivery trust', function() {
-    const mk = (key) => new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(app), key });
+    const mk = (key) => new TssKeyGen({ chain, network, baseUrl: '/bws/api', request: request(server), key });
     const pubKeyOf = (key) => key.createCredentials(null, { network, n: 1, account: 0 }).requestPubKey;
     const compressed = (hex: string) => BitcoreLib.PublicKey.fromPoint(new BitcoreLib.PublicKey(hex).point, true).toString();
     const uncompressed = (hex: string) => BitcoreLib.PublicKey.fromPoint(new BitcoreLib.PublicKey(hex).point, false).toString();
@@ -1633,7 +1642,7 @@ describe('TSS', function() {
 
   describe('Session restore delivery trust', function() {
     const WRAPPER_PREFIX = 'tsskeygen.1.';
-    const mk = (key, opts: { chain?: string } = {}) => new TssKeyGen({ chain: opts.chain || chain, network, baseUrl: '/bws/api', request: request(app), key });
+    const mk = (key, opts: { chain?: string } = {}) => new TssKeyGen({ chain: opts.chain || chain, network, baseUrl: '/bws/api', request: request(server), key });
     const credsOf = (key) => key.createCredentials(null, { network, n: 1, account: 0 });
     const pubKeyOf = (key) => credsOf(key).requestPubKey;
     const sessionKeysOf = async (id: string) => {
@@ -1753,6 +1762,9 @@ describe('TSS', function() {
         }));
         creator.subscribe({ timeout: 10, iterHandler: () => creator.unsubscribe() });
         await rolledBack;
+        // An error does not stop a subscription. A second subscribe() would replace the stored timer handle, leaving this
+        // one polling for the rest of the process with nothing able to clear it.
+        creator.unsubscribe();
         restoreSpy.callCount.should.equal(1);
         creator.verifyDeliveryBindings(sessionKeys);
 
