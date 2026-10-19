@@ -54,13 +54,30 @@ function evaluateRuntime({
   return { ok: problems.length === 0, problems, nodeMajor, npmVersion };
 }
 
-function main() {
-  const npmVersion = resolveNpmVersion(process.env);
-  const result = evaluateRuntime({ nodeVersion: process.version, npmVersion });
+// Resolves the live toolchain, evaluates it against the supported policy, and
+// reports any problems to stderr. Returns the evaluation result without
+// setting an exit code, so each entry point (this script's own `main`, the
+// compile runner) decides how to stop. Shared so every enforcing caller uses
+// the same version resolution and the same policy constants.
+function enforceRuntime({
+  env = process.env,
+  nodeVersion = process.version,
+  spawn = spawnSync,
+  logError = console.error,
+} = {}) {
+  const npmVersion = resolveNpmVersion(env, spawn);
+  const result = evaluateRuntime({ nodeVersion, npmVersion });
   if (!result.ok) {
-    console.error('[check-runtime] Unsupported toolchain:');
-    for (const problem of result.problems) console.error(`  - ${problem}`);
-    console.error(`  Required: Node ${EXPECTED_NODE_MAJOR}.x and npm ${EXPECTED_NPM_VERSION} exactly.`);
+    logError('[check-runtime] Unsupported toolchain:');
+    for (const problem of result.problems) logError(`  - ${problem}`);
+    logError(`  Required: Node ${EXPECTED_NODE_MAJOR}.x and npm ${EXPECTED_NPM_VERSION} exactly.`);
+  }
+  return result;
+}
+
+function main() {
+  const result = enforceRuntime();
+  if (!result.ok) {
     process.exitCode = 1;
     return;
   }
@@ -73,6 +90,7 @@ module.exports = {
   getNodeMajor,
   resolveNpmVersion,
   evaluateRuntime,
+  enforceRuntime,
 };
 
 if (require.main === module) {

@@ -11,7 +11,7 @@
 // for these fixtures, since none of their scripts have external dependencies.
 
 const assert = require('node:assert/strict');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -280,4 +280,112 @@ test('checkDiscovery finds no mismatch against the real repository as it stands 
   const repoRoot = path.resolve(__dirname, '..', '..');
   const failures = checkDiscovery(repoRoot);
   assert.deepEqual(failures, []);
+});
+
+// Runtime-enforcement regression, through the real entry point. These run the
+// actual scripts/workspaces/compile.cjs as a separate `node` process against
+// this repository's real root and real COMPILE_ORDER, so the whole of `main()`
+// (preflight -> discovery -> dispatch) is exercised. Real builds cannot start:
+// the `npm` the runner finds on PATH is a recording shim that never compiles
+// anything -- it only logs each invocation, answers `--version`, and exits.
+// `npm_config_user_agent` is always set explicitly (or removed) because these
+// tests may themselves be running under `npm test`, which would otherwise leak
+// the real npm's user agent into the runner and mask the PATH fallback.
+const COMPILE_CJS = path.resolve(__dirname, '..', '..', 'scripts', 'workspaces', 'compile.cjs');
+const REAL_NODE_USER_AGENT = `node/${process.version}`;
+
+function makeNpmShim({ versionOutput = '10.9.2\n', versionExit = 0, runExit = 0 } = {}) {
+  const shimDir = makeTempDir('compile-runner-npm-shim');
+  const logPath = path.join(shimDir, 'invocations.log');
+  const shimPath = path.join(shimDir, 'npm');
+  fs.writeFileSync(
+    shimPath,
+    `#!${process.execPath}\n` +
+      "const fs = require('fs');\n" +
+      `fs.appendFileSync(${JSON.stringify(logPath)}, process.argv.slice(2).join(' ') + '\\n');\n` +
+      "if (process.argv[2] === '--version') {\n" +
+      `  process.stdout.write(${JSON.stringify(versionOutput)});\n` +
+      `  process.exit(${versionExit});\n` +
+      '}\n' +
+      `process.exit(${runExit});\n`,
+    { mode: 0o755 }
+  );
+  const invocations = () =>
+    fs.existsSync(logPath) ? fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean) : [];
+  return { shimDir, invocations };
+}
+
+function runCompileEntryPoint({ shimDir, userAgent, nodeOptions }) {
+  const env = { ...process.env, PATH: `${shimDir}${path.delimiter}${process.env.PATH}` };
+  delete env.npm_config_user_agent;
+  if (userAgent) env.npm_config_user_agent = userAgent;
+  if (nodeOptions) env.NODE_OPTIONS = nodeOptions;
+  return spawnSync(process.execPath, [COMPILE_CJS], { env, encoding: 'utf8', timeout: 30000 });
+}
+
+function dispatchedCompiles(invocations) {
+  return invocations.filter((line) => line.startsWith('run compile'));
+}
+
+test('compile entry point rejects unsupported npm (npm/0.0.0 user agent) with nonzero exit before dispatching any workspace', () => {
+  const { shimDir, invocations } = makeNpmShim();
+  const result = runCompileEntryPoint({ shimDir, userAgent: `npm/0.0.0 ${REAL_NODE_USER_AGENT}` });
+  assert.notEqual(result.status, 0, `expected nonzero exit; stdout=${result.stdout} stderr=${result.stderr}`);
+  assert.match(result.stderr, /Expected npm 10\.9\.2 exactly, observed 0\.0\.0/);
+  assert.deepEqual(dispatchedCompiles(invocations()), [], 'no workspace compile may start under an unsupported npm');
+  assert.doesNotMatch(result.stdout, /\[compile\]/, 'the runner must not report starting any package');
+});
+
+test('compile entry point rejects unsupported npm resolved via the PATH fallback before dispatching any workspace', () => {
+  const { shimDir, invocations } = makeNpmShim({ versionOutput: '0.0.0\n' });
+  const result = runCompileEntryPoint({ shimDir });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Expected npm 10\.9\.2 exactly, observed 0\.0\.0/);
+  // The preflight itself asked the PATH npm for its version, and nothing more.
+  assert.deepEqual(invocations(), ['--version']);
+});
+
+test('compile entry point rejects an npm whose version cannot be determined before dispatching any workspace', () => {
+  const { shimDir, invocations } = makeNpmShim({ versionOutput: '', versionExit: 1 });
+  const result = runCompileEntryPoint({ shimDir });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Unable to determine an installed npm version/);
+  assert.deepEqual(dispatchedCompiles(invocations()), []);
+});
+
+test('compile entry point rejects an unsupported Node major before dispatching any workspace', () => {
+  const { shimDir, invocations } = makeNpmShim();
+  const preloadPath = path.join(shimDir, 'fake-node-version.cjs');
+  // Reports Node 20 to the runner without needing a second Node install.
+  fs.writeFileSync(
+    preloadPath,
+    "Object.defineProperty(process, 'version', { value: 'v20.11.0', configurable: true });\n"
+  );
+  const result = runCompileEntryPoint({
+    shimDir,
+    userAgent: `npm/10.9.2 ${REAL_NODE_USER_AGENT}`,
+    nodeOptions: `--require ${preloadPath}`,
+  });
+  assert.notEqual(result.status, 0, `expected nonzero exit; stdout=${result.stdout} stderr=${result.stderr}`);
+  assert.match(result.stderr, /Expected Node 22\.x, observed v20\.11\.0/);
+  assert.deepEqual(dispatchedCompiles(invocations()), []);
+});
+
+test('compile entry point under the supported toolchain still dispatches all seven workspaces sequentially, in order', () => {
+  for (const userAgent of [`npm/10.9.2 ${REAL_NODE_USER_AGENT}`, null]) {
+    const { shimDir, invocations } = makeNpmShim();
+    const result = runCompileEntryPoint({ shimDir, userAgent });
+    assert.equal(result.status, 0, `userAgent=${userAgent} stdout=${result.stdout} stderr=${result.stderr}`);
+    assert.deepEqual(
+      dispatchedCompiles(invocations()),
+      COMPILE_ORDER.map((name) => `run compile --workspace=${name}`)
+    );
+  }
+});
+
+test('compile entry point under the supported toolchain still propagates a workspace failure and stops before dependents', () => {
+  const { shimDir, invocations } = makeNpmShim({ runExit: 3 });
+  const result = runCompileEntryPoint({ shimDir, userAgent: `npm/10.9.2 ${REAL_NODE_USER_AGENT}` });
+  assert.equal(result.status, 3);
+  assert.deepEqual(dispatchedCompiles(invocations()), [`run compile --workspace=${COMPILE_ORDER[0]}`]);
 });

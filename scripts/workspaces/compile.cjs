@@ -21,6 +21,7 @@
 
 const { spawn, execFileSync } = require('child_process');
 const path = require('path');
+const { enforceRuntime } = require('./check-runtime.cjs');
 const { EXPECTED_WORKSPACES, COMPILE_ORDER } = require('./lib/constants.cjs');
 const { checkCompileMembership } = require('./lib/manifests.cjs');
 const { loadWorkspaceManifests } = require('./lib/util.cjs');
@@ -228,6 +229,15 @@ async function runSequentialCompile(order, opts) {
 }
 
 async function main() {
+  // The runner can be invoked directly (`node scripts/workspaces/compile.cjs`,
+  // or `npm run compile` outside an install), where neither root `preinstall`
+  // nor CI/Docker's explicit preflight has run. Enforce the supported
+  // toolchain here, before discovery and before any workspace is dispatched.
+  if (!enforceRuntime().ok) {
+    process.exitCode = 1;
+    return;
+  }
+
   const rootDir = path.resolve(__dirname, '..', '..');
 
   const discoveryFailures = checkDiscovery(rootDir);
