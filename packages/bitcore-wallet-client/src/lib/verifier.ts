@@ -1,7 +1,8 @@
 import {
   BitcoreLib as Bitcore,
   BitcoreLibCash,
-  Utils as CWCUtils
+  Utils as CWCUtils,
+  Transactions
 } from '@bitpay-labs/crypto-wallet-core';
 import { singleton } from 'preconditions';
 import { Constants, Utils } from './common';
@@ -277,62 +278,304 @@ export class Verifier {
 
     log.debug(`[TXP ${txp.id}] Regenerating & verifying tx proposal hash -> Hash: ${hash}, Signature: ${txp.proposalSignature}`);
   
-    const verified = Utils.verifyMessage(hash, txp.proposalSignature, creatorSigningPubKey);
-    if (!verified && !txp.prePublishRaw) {
-      log.debug(`[TXP ${txp.id}] Invalid proposal signature, no prePublishRaw to fall back to`);
-      return false;
+    // The signature is only trusted if it matches the tx we rebuilt, or (on publish-mutable chains) the
+    // pre-publish serialization that we can tie back to this proposal. Anything else stays untrusted.
+    let signatureTrusted = Utils.verifyMessage(hash, txp.proposalSignature, creatorSigningPubKey);
+    if (!signatureTrusted) {
+      // Local rebuild != creator's signature. Legit only when BWS mutated a field at publish (SVM recent
+      // blockhash, or EVM/XRP deferred nonce): the creator signed the pre-publish serialization, stored as
+      // txp.prePublishRaw. Trust it only if the signature is valid over it AND it is bound to this proposal.
+      const prePublishRaw = this.prePublishRawParts(txp);
+      if (!prePublishRaw) {
+        log.debug(`[TXP ${txp.id}] Invalid proposal signature, no usable prePublishRaw to fall back to`);
+      } else if (!Utils.verifyMessage(prePublishRaw, txp.proposalSignature, creatorSigningPubKey)) {
+        log.debug(`[TXP ${txp.id}] Invalid proposal signature, even with prePublishRaw fallback`);
+      } else if (!this.checkPrePublishRaw(chain, txp)) {
+        log.warn(`[TXP ${txp.id}] prePublishRaw is not bound to this proposal; possible server tampering`);
+      } else {
+        signatureTrusted = true;
+      }
     }
-    
-    if (!verified && txp.prePublishRaw && !Utils.verifyMessage(txp.prePublishRaw, txp.proposalSignature, creatorSigningPubKey)) {
-      log.debug(`[TXP ${txp.id}] Invalid proposal signature, even with prePublishRaw fallback`);
+    if (!signatureTrusted) {
       return false;
     }
 
-    if (Constants.UTXO_CHAINS.includes(chain)) {
-      if (txp.changeAddress && !this.checkAddress(credentials, txp.changeAddress)) {
+    // The signature is trusted at this point. Still need the proposal's addresses to be what this wallet
+    // expects before accepting it.
+    return this.checkProposalAddresses(credentials, chain, txp);
+  }
+
+  /**
+   * Checks the proposal carries the address fields this wallet expects for its chain. Account-based chains
+   * have no change or escrow address, so they must carry neither. UTXO chains need a change address that is
+   * ours (or sendMax), an escrow address on the wallets that can escrow, and any address present must be
+   * ours. A chain we don't recognize gets no pass: we can't state its address rules, so we can't verify them.
+   *
+   * @param {Object} credentials
+   * @param {string} chain - lower-cased chain of the proposal
+   * @param {Object} txp - the transaction proposal
+   */
+  static checkProposalAddresses(credentials, chain, txp) {
+    const isAccountChain = [
+      ...Constants.EVM_CHAINS,
+      ...Constants.SVM_CHAINS,
+      ...Constants.RIPPLE_CHAINS
+    ].includes(chain);
+    if (isAccountChain) {
+      if (txp.changeAddress || txp.escrowAddress) {
+        log.warn(`[TXP ${txp.id}] Unexpected change/escrow address on ${chain} proposal`);
+        return false;
+      }
+      return true;
+    }
+    if (!Constants.UTXO_CHAINS.includes(chain)) {
+      log.warn(`[TXP ${txp.id}] Cannot verify addresses for unrecognized chain ${chain}`);
+      return false;
+    }
+    if (txp.changeAddress) {
+      if (!this.checkAddress(credentials, txp.changeAddress)) {
         log.debug(`[TXP ${txp.id}] Invalid change address`);
         return false;
-      } else if (!txp.changeAddress && !txp.sendMax) {
-        log.warn(`[TXP ${txp.id}] Missing change address for non sendMax transaction proposal`);
-        return false;
       }
-      if (txp.escrowAddress && !this.checkAddress(credentials, txp.escrowAddress, txp.inputs)) {
-        log.debug(`[TXP ${txp.id}] Invalid escrow address`);
-        return false;
-      }
+    } else if (!txp.sendMax) {
+      log.warn(`[TXP ${txp.id}] Missing change address for non sendMax transaction proposal`);
+      return false;
     }
-
+    // BWS copies instantAcceptanceEscrow onto every proposal but only creates an escrow address for a
+    // ZCE-capable wallet, so the flag alone does not mean one is owed. Require it exactly where the server
+    // would have made one, otherwise a BTC wallet whose client sent the flag fails a proposal that is fine.
+    const zceCapable = chain === 'bch' && credentials.addressType === Constants.SCRIPT_TYPES.P2PKH;
+    if (zceCapable && txp.instantAcceptanceEscrow && !txp.escrowAddress) {
+      log.warn(`[TXP ${txp.id}] Missing escrow address for instant acceptance proposal`);
+      return false;
+    }
+    if (txp.escrowAddress && !this.checkAddress(credentials, txp.escrowAddress, txp.inputs)) {
+      log.debug(`[TXP ${txp.id}] Invalid escrow address`);
+      return false;
+    }
     return true;
   }
 
-  static checkPaypro(txp, payproOpts) {
-    let toAddress, amount;
+  /**
+   * txp.prePublishRaw as a list of raw transactions, or null when it isn't one. The server supplies this
+   * value, so it arrives in whatever shape the server chose: one raw tx, a list of them, or something
+   * unusable like an empty list, which hashes to nothing and makes Utils.verifyMessage throw rather than
+   * report a failed check.
+   *
+   * @param {Object} txp - the transaction proposal
+   */
+  static prePublishRawParts(txp): string[] | null {
+    if (!txp.prePublishRaw) {
+      return null;
+    }
+    const parts = Array.isArray(txp.prePublishRaw) ? txp.prePublishRaw : [txp.prePublishRaw];
+    if (!parts.length || parts.some(raw => !raw || typeof raw !== 'string')) {
+      return null;
+    }
+    return parts;
+  }
 
-    if (parseInt(txp.version) >= 3) {
-      toAddress = txp.outputs[0].toAddress;
-      amount = txp.amount;
-    } else {
-      toAddress = txp.toAddress;
-      amount = txp.amount;
+  /**
+   * True only if txp.prePublishRaw is the same transaction as the current proposal, differing solely in a
+   * field BWS mutates at publish (SVM blockhash / EVM-XRP nonce). Binds the creator's fallback signature to
+   * this proposal: without it a compromised server could pair a valid (prePublishRaw, proposalSignature)
+   * with a tampered destination/amount. Rejects non-mutable chains and fails closed on any error.
+   *
+   * @param {string} chain - lower-cased chain of the proposal
+   * @param {Object} txp - the transaction proposal (must carry prePublishRaw)
+   */
+  static checkPrePublishRaw(chain, txp) {
+    // Only chains with a publish-mutable serialized field legitimately carry prePublishRaw: the recent
+    // blockhash (SVM) or account nonce (EVM/XRP). Anywhere else (e.g. UTXO) its presence is illegitimate.
+    const canHaveMutableLifetime = [
+      ...Constants.SVM_CHAINS,
+      ...Constants.EVM_CHAINS,
+      ...Constants.RIPPLE_CHAINS
+    ].includes(chain);
+    if (!canHaveMutableLifetime) {
+      log.warn(`[TXP ${txp.id}] prePublishRaw present on chain ${chain} that cannot mutate at publish; refusing fallback`);
+      return false;
+    }
+    try {
+      const prePublishRaw = this.prePublishRawParts(txp);
+      if (!prePublishRaw) {
+        return false;
+      }
+      // Recover the mutable field (blockhash / nonce) from the pre-publish serialization the creator signed;
+      // the stored proposal carries the refreshed value, so it isn't readable off txp directly.
+      const provider: any = Transactions.get({ chain });
+      const mutableFields = provider.getMutableFields(prePublishRaw[0]);
+      if (!mutableFields || Object.values(mutableFields).every(v => v == null)) {
+        log.warn(`[TXP ${txp.id}] Could not recover pre-publish mutable fields from prePublishRaw; refusing fallback`);
+        return false;
+      }
+      // Rebuild with the pre-publish mutable field: an untampered proposal reproduces prePublishRaw exactly;
+      // any changed field (destination, amount, from, contract) serializes differently and fails the compare.
+      const rebuilt = Utils.buildTx({ ...txp, ...mutableFields }).uncheckedSerialize();
+      const rebuiltArr = Array.isArray(rebuilt) ? rebuilt : [rebuilt];
+      // Require a non-empty, positive match: two empty sets would make `.every()` vacuously true.
+      if (!rebuiltArr.length || rebuiltArr.length !== prePublishRaw.length) {
+        return false;
+      }
+      return rebuiltArr.every((raw, i) => raw === prePublishRaw[i]);
+    } catch (err) {
+      log.warn(`[TXP ${txp.id}] Failed to verify prePublishRaw binding: ${err?.message || err}`);
+      return false;
+    }
+  }
+
+  private static payproAddressesEqual(chain, address1, address2) {
+    if (typeof address1 !== 'string' || typeof address2 !== 'string') return false;
+    if (Constants.EVM_CHAINS.includes(chain)) {
+      return address1.toLowerCase() === address2.toLowerCase();
+    }
+    if (chain !== 'bch') return address1 === address2;
+    const normalize = address => {
+      try {
+        return new BCHAddress(address).toCashAddress(true);
+      } catch {
+        try {
+          return BCHAddress.fromObject(new Bitcore.Address(address).toObject()).toCashAddress(true);
+        } catch { return; }
+      }
+    };
+    const normalizedAddress = normalize(address1);
+    return !!normalizedAddress && normalizedAddress === normalize(address2);
+  }
+
+  private static expectedPayproOutputs(chain, instructions): any[] | undefined {
+    if (!Array.isArray(instructions) || !instructions.length) return;
+
+    if (Constants.UTXO_CHAINS.includes(chain)) {
+      if (instructions.some(instruction => !Array.isArray(instruction?.outputs) || !instruction.outputs.length)) return;
+      return instructions.flatMap(instruction =>
+        instruction.outputs.map(output => ({
+          toAddress: output?.address,
+          amount: output?.amount
+        }))
+      );
     }
 
-    if (amount != (payproOpts.instructions || []).reduce((sum, i) => sum += i.amount, 0)) return false;
+    if (Constants.EVM_CHAINS.includes(chain)) {
+      return instructions.map(instruction => ({
+        toAddress: instruction?.to,
+        amount: instruction?.value,
+        data: instruction?.data
+      }));
+    }
 
-    if (txp.coin == 'btc' && toAddress != payproOpts.instructions[0].toAddress)
+    if (Constants.RIPPLE_CHAINS.includes(chain) || Constants.SVM_CHAINS.includes(chain)) {
+      if (instructions.length !== 1) return;
+      const outputs = instructions[0]?.outputs;
+      if (!Array.isArray(outputs) || outputs.length !== 1) return;
+      const output = outputs[0];
+      return [{
+        toAddress: output?.address,
+        amount: output?.amount,
+        destinationTag: output?.destinationTag,
+        invoiceID: output?.invoiceID
+      }];
+    }
+  }
+
+  /**
+   * Verify every output against signed PayPro instructions so a copayer cannot hide unauthorized outputs.
+   */
+  static checkPaypro(txp, payproOpts) {
+    const chain = typeof txp?.chain === 'string'
+      ? txp.chain.toLowerCase()
+      : Utils.getChain(txp?.coin); // backwards compatibility
+
+    if (!Constants.CHAINS.includes(chain)) {
+      log.debug(`[TXP ${txp?.id}] Unsupported PayPro chain`);
       return false;
+    }
+    // EVM addresses are identical across chains and networks, so comparing the destination alone
+    // won't catch a proposal paying a mainnet address against a testnet (or other chain) invoice.
+    if (chain !== payproOpts?.chain?.toLowerCase()) {
+      log.debug(`[TXP ${txp?.id}] PayPro chain does not match transaction proposal`);
+      return false;
+    }
+    if (txp?.network !== payproOpts?.network) {
+      log.debug(`[TXP ${txp?.id}] PayPro network does not match transaction proposal`);
+      return false;
+    }
+    if (!(parseInt(txp?.version) >= 3)) {
+      log.debug(`[TXP ${txp?.id}] Transaction proposal version not supported by PayPro`);
+      return false;
+    }
 
-    // Workaround for cashaddr/legacy address problems...
+    const outputs = txp.outputs;
+    const expectedOutputs = this.expectedPayproOutputs(chain, payproOpts?.instructions);
+    if (!expectedOutputs?.length) {
+      log.debug(`[TXP ${txp?.id}] Invalid PayPro instructions`);
+      return false;
+    }
+    if (!Array.isArray(outputs)) {
+      log.debug(`[TXP ${txp?.id}] Invalid transaction proposal outputs`);
+      return false;
+    }
+    if (outputs.length !== expectedOutputs.length) {
+      log.debug(`[TXP ${txp?.id}] PayPro output count does not match transaction proposal`);
+      return false;
+    }
+
+    for (let i = 0; i < outputs.length; i++) {
+      const output = outputs[i];
+      const expectedOutput = expectedOutputs[i];
+      if (!this.atomicValuesEqual(output?.amount, expectedOutput.amount)) {
+        log.debug(`[TXP ${txp?.id}] PayPro output ${i} amount does not match transaction proposal`);
+        return false;
+      }
+      if (!this.payproAddressesEqual(chain, output?.toAddress, expectedOutput.toAddress)) {
+        log.debug(`[TXP ${txp?.id}] PayPro output ${i} address does not match transaction proposal`);
+        return false;
+      }
+      if (
+        Constants.EVM_CHAINS.includes(chain) &&
+        (i === 0 && txp.data ? txp.data : output?.data) !== expectedOutput.data
+      ) {
+        log.debug(`[TXP ${txp?.id}] PayPro output ${i} data does not match transaction proposal`);
+        return false;
+      }
+    }
+
+    if (Constants.RIPPLE_CHAINS.includes(chain)) {
+      if (txp.multiTx) {
+        log.debug(`[TXP ${txp?.id}] PayPro does not support XRP multiTx transaction proposals`);
+        return false;
+      }
+      if (
+        txp.txType != null &&
+        (typeof txp.txType !== 'string' || txp.txType.toLowerCase() !== 'payment')
+      ) {
+        log.debug(`[TXP ${txp?.id}] PayPro does not support non-payment XRP transaction proposals`);
+        return false;
+      }
+      // XRP puts both the destination tag and the invoice ID on-chain, and the merchant reconciles
+      // the payment with them - so neither is free for the proposal to choose.
+      if (this.normalizeAtomicValue(expectedOutputs[0].destinationTag) === 0n) {
+        log.debug(`[TXP ${txp?.id}] PayPro destination tag 0 is not supported`);
+        return false;
+      }
+      if (!this.optionalAtomicValuesEqual(txp.destinationTag, expectedOutputs[0].destinationTag)) {
+        log.debug(`[TXP ${txp?.id}] PayPro destination tag does not match transaction proposal`);
+        return false;
+      }
+      if ((txp.invoiceID ?? null) !== (expectedOutputs[0].invoiceID ?? null)) {
+        log.debug(`[TXP ${txp?.id}] PayPro invoice ID does not match transaction proposal`);
+        return false;
+      }
+    }
+
+    // On SOL the invoice ID travels as a memo instruction rather than as a transaction field
     if (
-      txp.coin == 'bch' &&
-      new BCHAddress(toAddress).toString() !=
-        new BCHAddress(payproOpts.instructions[0].toAddress).toString()
-    )
+      Constants.SVM_CHAINS.includes(chain) &&
+      (txp.memo ?? null) !== (expectedOutputs[0].invoiceID ?? null)
+    ) {
+      log.debug(`[TXP ${txp?.id}] PayPro memo does not match transaction proposal`);
       return false;
-
-    // this generates problems...
-    //  if (feeRate && payproOpts.requiredFeeRate &&
-    //      feeRate < payproOpts.requiredFeeRate)
-    //  return false;
+    }
 
     return true;
   }

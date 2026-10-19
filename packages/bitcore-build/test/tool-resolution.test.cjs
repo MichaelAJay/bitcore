@@ -70,6 +70,29 @@ async function exerciseBrowserBundling(fixture, marker) {
     assert.equal(maketestsError, null, 'browser:maketests should succeed once tools resolve correctly: ' + maketestsError);
     assertBundle(path.join(fixture.consumerDir, 'tests.js'), marker, 'browser:maketests');
 
+    // Run real coverage with neither CLI available through consumer .bin.
+    // This protects the coverage migration as well as browser tool lookup.
+    const coverageCommand = captureCommandFor(capturedCommands, ' --exit --recursive');
+    const { resolvePackageDir } = require(fixture.helperIndexPath);
+    for (const [name, bin] of [['monocart-coverage-reports', 'mcr'], ['mocha', 'mocha']]) {
+      const toolDir = resolvePackageDir(name, fixture.helperDir);
+      const manifest = JSON.parse(fs.readFileSync(path.join(toolDir, 'package.json'), 'utf8'));
+      assert.ok(coverageCommand.includes('"' + path.join(toolDir, manifest.bin[bin]) + '"'));
+    }
+    fs.writeFileSync(path.join(fixture.consumerDir, 'mcr.config.cjs'), `module.exports = {
+      reports: ['v8-json'], outputDir: 'coverage',
+      entryFilter: entry => entry.url.endsWith('/lib/index.js')
+    };\n`);
+    const testPath = path.join(fixture.consumerDir, 'test', 'index.js');
+    fs.writeFileSync(testPath, "const assert = require('node:assert/strict');\ndescribe('coverage', () => { it('loads consumer source', () => assert.deepEqual(require('../lib'), {})); });\n");
+    assert.equal(await runTask(tasks['test:node']), null, 'test:node should run MCR and Mocha from helper dependencies');
+    const reportPath = path.join(fixture.consumerDir, 'coverage', 'coverage-report.json');
+    assert.ok(fs.existsSync(reportPath), 'MCR should write its V8 JSON report');
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+    assert.ok(report.files.some(file => file.sourcePath.endsWith('lib/index.js')), 'coverage must include executed consumer source');
+    fs.writeFileSync(testPath, "describe('failure', () => { it('propagates', () => { throw new Error('expected fixture failure'); }); });\n");
+    assert.ok(await runTask(tasks['test:node']), 'test:node must propagate failing Mocha exit status through MCR');
+
     return { browserifyCommand, maketestsCommand };
   } finally {
     process.chdir(originalCwd);

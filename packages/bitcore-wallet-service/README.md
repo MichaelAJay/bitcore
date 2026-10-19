@@ -92,9 +92,6 @@ There are plenty examples of creating and sending proposals in the `/test/integr
 - copay running on port: 8100
 - bitcoin-core running on regtest mode (blue icon logo)
 
-> mongo topology crashes sometimes due to notifications being incompatible in a web browser
-> **bitcore-wallet-service/lib/notificationbroadcaster.js**
-> Note: If testing on a PC browser, comment out notificationbroadcaster.js to disable notifications.
 
 ### Steps:
 

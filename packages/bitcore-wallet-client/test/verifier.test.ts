@@ -1,6 +1,7 @@
 'use strict';
 
 import chai from 'chai';
+import { Utils } from '../src/lib/common';
 import { Verifier } from '../src/lib/verifier';
 import { Key } from '../src/lib/key';
 
@@ -188,6 +189,194 @@ describe('Verifier', function() {
     });
   });
 
+  describe('checkPaypro', function() {
+    const createPaypro = (chain, outputs) => ({
+      chain,
+      network: 'livenet',
+      instructions: [{ outputs }]
+    });
+    const createTxp = (paypro, outputs) => ({
+      version: 3,
+      coin: paypro.chain,
+      chain: paypro.chain,
+      network: paypro.network,
+      outputs
+    });
+    const addresses = {
+      btc: ['1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA', '1BpEi6DfDAUFd7GtittLSdBeYJvcoaVggu'],
+      bch: ['qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a', 'qrvcdmgpk73zyfd8pmdl9wnuld36zh9n4gms8s0u59'],
+      doge: ['DH5yaieqoZN36fDVciNyRueRGvGLR3mr7L', 'DTdKu8YgcxoXyjFCDtCeKimaZzsK27rcwT'],
+      ltc: ['MTf4tP1TCNBn8dNkyxeBVoPrFCcVzxJvvh', 'MQMcJhpWHYVeQArcZR3sBgyPZxxRtnH441']
+    };
+
+    it('should verify every UTXO output address and amount', function() {
+      for (const [chain, [address, otherAddress]] of Object.entries(addresses)) {
+        const paypro = createPaypro(chain, [{ address, amount: 10000 }]);
+        const txp = createTxp(paypro, [{ toAddress: address, amount: 10000 }]);
+
+        Verifier.checkPaypro(txp, paypro).should.be.true;
+        Verifier.checkPaypro({
+          ...txp,
+          outputs: [{ toAddress: otherAddress, amount: 10000 }]
+        }, paypro).should.be.false;
+        Verifier.checkPaypro({
+          ...txp,
+          outputs: [{ toAddress: address, amount: 9999 }]
+        }, paypro).should.be.false;
+        Verifier.checkPaypro({
+          ...txp,
+          outputs: [
+            { toAddress: address, amount: 1 },
+            { toAddress: otherAddress, amount: 9999 }
+          ]
+        }, paypro).should.be.false;
+      }
+    });
+
+    it('should verify every output of UTXO instructions', function() {
+      const outputs = [
+        { address: addresses.btc[0], amount: 6000 },
+        { address: addresses.btc[1], amount: 4000 }
+      ];
+      const paypro = createPaypro('btc', outputs);
+      const txp = createTxp(paypro, outputs.map(output => ({
+        toAddress: output.address,
+        amount: output.amount
+      })));
+
+      Verifier.checkPaypro(txp, paypro).should.be.true;
+      Verifier.checkPaypro({ ...txp, outputs: [txp.outputs[0]] }, paypro).should.be.false;
+      Verifier.checkPaypro({ ...txp, outputs: [...txp.outputs].reverse() }, paypro).should.be.false;
+      Verifier.checkPaypro(txp, {
+        ...paypro,
+        instructions: [
+          { outputs: [outputs[0]] },
+          { outputs: [outputs[1]] }
+        ]
+      }).should.be.true;
+    });
+
+    it('should accept equivalent BCH encodings and reject malformed addresses', function() {
+      const paypro = createPaypro('bch', [{ address: addresses.bch[0], amount: 10000 }]);
+      const txp = createTxp(paypro, [{
+        toAddress: '1BpEi6DfDAUFd7GtittLSdBeYJvcoaVggu',
+        amount: 10000
+      }]);
+
+      Verifier.checkPaypro(txp, paypro).should.be.true;
+      Verifier.checkPaypro({
+        ...txp,
+        outputs: [{ toAddress: 'not-an-address', amount: 10000 }]
+      }, paypro).should.be.false;
+    });
+
+    it('should reject unsupported or mismatched chain, network, or instruction shape', function() {
+      const paypro = createPaypro('btc', [{ address: addresses.btc[0], amount: 10000 }]);
+      const txp = createTxp(paypro, [{ toAddress: addresses.btc[0], amount: 10000 }]);
+
+      Verifier.checkPaypro({ ...txp, chain: 'doge' }, paypro).should.be.false;
+      Verifier.checkPaypro({ ...txp, network: 'testnet' }, paypro).should.be.false;
+      Verifier.checkPaypro(txp, { ...paypro, instructions: [] }).should.be.false;
+      Verifier.checkPaypro({ ...txp, chain: 'unknown' }, { ...paypro, chain: 'unknown' }).should.be.false;
+    });
+
+    it('should bind EVM payments to their contract and calldata', function() {
+      const contract = '0xc27eD3DF0DE776246cdAD5a052A9982473FceaB8';
+      const paypro = {
+        chain: 'eth',
+        network: 'livenet',
+        instructions: [{ to: contract, value: 0, data: '0x095ea7b3aaaa' }]
+      };
+      const txp = createTxp(paypro, [{
+        toAddress: contract.toLowerCase(),
+        amount: 0,
+        data: '0x095ea7b3aaaa'
+      }]);
+
+      Verifier.checkPaypro(txp, paypro).should.be.true;
+      Verifier.checkPaypro({ ...txp, data: '0x095ea7b3deadbeef' }, paypro).should.be.false;
+      Verifier.checkPaypro({
+        ...txp,
+        outputs: [{ ...txp.outputs[0], toAddress: '0x0000000000000000000000000000000000000001' }]
+      }, paypro).should.be.false;
+    });
+
+    it('should bind XRP payments to the destination tag and invoice ID', function() {
+      const address = 'rEqj9WKSH7wEkPvWf6b4gCi26Y3F7HbKUF';
+      const invoiceID = '1012345678901234567890123456710123456789012345678901567890123456';
+      const paypro = {
+        chain: 'xrp',
+        network: 'livenet',
+        instructions: [{ outputs: [{ address, amount: 10000, destinationTag: 12345, invoiceID }] }]
+      };
+      const txp = {
+        ...createTxp(paypro, [{ toAddress: address, amount: 10000 }]),
+        destinationTag: '12345',
+        invoiceID
+      };
+      const zeroTagPaypro = {
+        ...paypro,
+        instructions: [{ outputs: [{ ...paypro.instructions[0].outputs[0], destinationTag: 0 }] }]
+      };
+
+      Verifier.checkPaypro(txp, paypro).should.be.true;
+      Verifier.checkPaypro({ ...txp, destinationTag: 999 }, paypro).should.be.false;
+      Verifier.checkPaypro({ ...txp, multiTx: true }, paypro).should.be.false;
+      Verifier.checkPaypro({ ...txp, txType: 'accountdelete' }, paypro).should.be.false;
+      // The XRP transaction builders currently omit a zero destination tag
+      Verifier.checkPaypro({ ...txp, destinationTag: '0' }, zeroTagPaypro).should.be.false;
+      // both reach the ledger and the merchant reconciles the payment with them
+      Verifier.checkPaypro({ ...txp, invoiceID: `2${invoiceID.slice(1)}` }, paypro).should.be.false;
+      Verifier.checkPaypro({ ...txp, invoiceID: undefined }, paypro).should.be.false;
+    });
+
+    it('should bind SOL payments to the invoice ID carried as a memo', function() {
+      const address = 'So11111111111111111111111111111111111111112';
+      const paypro = {
+        chain: 'sol',
+        network: 'livenet',
+        instructions: [{ outputs: [{ address, amount: 10000, invoiceID: 'LanynqCPoL2JQb8z8s5Z3X' }] }]
+      };
+      const txp = {
+        ...createTxp(paypro, [{ toAddress: address, amount: 10000 }]),
+        memo: 'LanynqCPoL2JQb8z8s5Z3X'
+      };
+
+      Verifier.checkPaypro(txp, paypro).should.be.true;
+      Verifier.checkPaypro({ ...txp, memo: 'GsbhMZeeUebqzEeDmNubEP' }, paypro).should.be.false;
+      Verifier.checkPaypro({ ...txp, memo: undefined }, paypro).should.be.false;
+    });
+
+    it('should bind every instruction of a multi-step EVM payment', function() {
+      // ERC20 invoices use separate approve and payment instructions
+      const tokenContract = '0xFEb423814D0208e9e2a3F5B0F0171e97376E20Bc';
+      const paymentContract = '0xc27eD3DF0DE776246cdAD5a052A9982473FceaB8';
+      const paypro = {
+        chain: 'eth',
+        network: 'livenet',
+        instructions: [
+          { to: tokenContract, value: 0, data: '0x095ea7b3aaaa' },
+          { to: paymentContract, value: 0, data: '0xd7bb99babbbb' }
+        ]
+      };
+      const outputs = paypro.instructions.map(i => ({ toAddress: i.to, amount: i.value, data: i.data }));
+      const txp = createTxp(paypro, outputs);
+
+      Verifier.checkPaypro(txp, paypro).should.be.true;
+      // tampering with the second step must not slip past a correct first one
+      Verifier.checkPaypro({
+        ...txp,
+        outputs: [outputs[0], { ...outputs[1], data: '0xd7bb99badeadbeef' }]
+      }, paypro).should.be.false;
+      Verifier.checkPaypro({
+        ...txp,
+        outputs: [outputs[0], { ...outputs[1], toAddress: tokenContract }]
+      }, paypro).should.be.false;
+      // dropping a step is not a valid payment either
+      Verifier.checkPaypro({ ...txp, outputs: [outputs[0]] }, paypro).should.be.false;
+    });
+  });
+
   describe('checkAddress', function() {
     it('should verify a BTC  address', () => {
       const cred = aKey.createCredentials(null, { coin: 'btc', network: 'livenet', account: 0, n: 1 });
@@ -220,6 +409,153 @@ describe('Verifier', function() {
         path: 'm/0/0',
         publicKeys: ['0237b0bb7a8288d38ed49a524b5dc98cff3eb5ca824c9f9dc0dfdb3d9cd600f299']
       }).should.be.true;
+    });
+  });
+
+  describe('checkProposalAddresses', function() {
+    const btcCred = () => {
+      const cred = aKey.createCredentials(null, { coin: 'btc', network: 'livenet', account: 0, n: 1 });
+      cred.addWalletInfo('id', 'name', 1, 1, 'copayer');
+      return cred;
+    };
+    const ourChange = {
+      address: '1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA',
+      path: 'm/0/0',
+      publicKeys: ['03aaeb52dd7494c361049de67cc680e83ebcbbbdbeb13637d92cd845f70308af5e']
+    };
+    const theirChange = { ...ourChange, address: '1BitcoinEaterAddressDontSendf59kuE' };
+
+    it('should reject a change or escrow address on account-based chains', function() {
+      const cred = btcCred();
+
+      for (const chain of ['eth', 'matic', 'sol', 'xrp']) {
+        Verifier.checkProposalAddresses(cred, chain, { id: 'txp' }).should.be.true;
+        Verifier.checkProposalAddresses(cred, chain, { id: 'txp', changeAddress: ourChange }).should.be.false;
+        Verifier.checkProposalAddresses(cred, chain, { id: 'txp', escrowAddress: ourChange }).should.be.false;
+      }
+    });
+
+    it('should reject a chain it has no address rules for', function() {
+      Verifier.checkProposalAddresses(btcCred(), 'notachain', { id: 'txp', sendMax: true }).should.be.false;
+    });
+
+    it('should require our change address on UTXO chains', function() {
+      const cred = btcCred();
+
+      Verifier.checkProposalAddresses(cred, 'btc', { id: 'txp', changeAddress: ourChange }).should.be.true;
+      Verifier.checkProposalAddresses(cred, 'btc', { id: 'txp', sendMax: true }).should.be.true;
+      Verifier.checkProposalAddresses(cred, 'btc', { id: 'txp', changeAddress: theirChange }).should.be.false;
+      Verifier.checkProposalAddresses(cred, 'btc', { id: 'txp' }).should.be.false;
+    });
+
+    it('should require an escrow address only where the wallet can escrow', function() {
+      const bchCred = (addressType) => {
+        const cred = aKey.createCredentials(null, { coin: 'bch', network: 'livenet', account: 0, n: 1 });
+        cred.addWalletInfo('id', 'name', 1, 1, 'copayer');
+        cred.addressType = addressType;
+        return cred;
+      };
+      // sendMax so the change check passes without deriving a per-chain change address
+      const escrowTxp = { id: 'txp', sendMax: true, instantAcceptanceEscrow: 1000 };
+
+      // BWS only creates an escrow address for a ZCE-capable wallet, so the flag alone owes us nothing
+      Verifier.checkProposalAddresses(btcCred(), 'btc', escrowTxp).should.be.true;
+      Verifier.checkProposalAddresses(bchCred('P2SH'), 'bch', escrowTxp).should.be.true;
+      // on a wallet that can escrow, a proposal asking for it must carry an address, and it must be ours
+      Verifier.checkProposalAddresses(bchCred('P2PKH'), 'bch', escrowTxp).should.be.false;
+      Verifier.checkProposalAddresses(bchCred('P2PKH'), 'bch', {
+        ...escrowTxp, escrowAddress: theirChange
+      }).should.be.false;
+    });
+  });
+
+  describe('checkPrePublishRaw', function() {
+    const ATTACKER_EVM = '0x1111111111111111111111111111111111111111';
+    const ATTACKER_SOL = 'F7FknkRckx4yvA3Gexnx1H3nwPxndMxVt58BwAzEQhcY';
+    const ATTACKER_XRP = 'rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe';
+
+    const solTxp = (overrides = {}) => ({
+      chain: 'sol',
+      category: 'transfer',
+      from: '8WyoNvKsmfdG6zrbzNBVN8DETyLra3ond61saU9C52YR',
+      outputs: [{ toAddress: '3xkNjKm2zvGRvH2z2Nf9Y5hFvHZFtQXbQb1PBxDT56Xy', amount: 3896000000000000 }],
+      blockHash: 'GtV1Hb3FvP3HURHAsj8mGwEqCumvP3pv3i6CVCzYNj3d',
+      blockHeight: 531575,
+      ...overrides
+    });
+
+    const evmTxp = (overrides = {}) => ({
+      chain: 'eth',
+      network: 'livenet',
+      outputs: [{ toAddress: '0x37d7B3bBD88EFdE6a93cF74D2F5b0385D3E3B08A', amount: 1000 }],
+      from: '0x37d7B3bBD88EFdE6a93cF74D2F5b0385D3E3B08A',
+      nonce: 0,
+      gasLimit: 21000,
+      gasPrice: 20000000000,
+      data: '0x',
+      ...overrides
+    });
+
+    const xrpTxp = (overrides = {}) => ({
+      chain: 'xrp',
+      outputs: [{ toAddress: 'rDzTZxa7NwD9vmNf5dvTbW4FQDNSRsfPv6', amount: 8000 }],
+      from: 'rEqj9WKSH7wEkPvWf6b4gCi26Y3F7HbKUF',
+      fee: 12,
+      nonce: 1,
+      ...overrides
+    });
+
+    it('accepts a SOL proposal whose blockhash was refreshed at publish', function() {
+      const prePublishRaw = Utils.buildTx(solTxp()).uncheckedSerialize();
+      const current = solTxp({ blockHash: 'H1oRr1nfr4b6eZjs9Ssn3bxUmcRAjqRxrbTKuwSPZ9mE', prePublishRaw });
+      Verifier.checkPrePublishRaw('sol', current).should.be.true;
+    });
+
+    it('rejects a SOL proposal whose destination was tampered', function() {
+      const prePublishRaw = Utils.buildTx(solTxp()).uncheckedSerialize();
+      const current = solTxp({
+        blockHash: 'H1oRr1nfr4b6eZjs9Ssn3bxUmcRAjqRxrbTKuwSPZ9mE',
+        outputs: [{ toAddress: ATTACKER_SOL, amount: 3896000000000000 }],
+        prePublishRaw
+      });
+      Verifier.checkPrePublishRaw('sol', current).should.be.false;
+    });
+
+    it('rejects an EVM proposal whose destination was tampered', function() {
+      const prePublishRaw = Utils.buildTx(evmTxp()).uncheckedSerialize();
+      const current = evmTxp({
+        nonce: 9,
+        outputs: [{ toAddress: ATTACKER_EVM, amount: 1000 }],
+        prePublishRaw
+      });
+      Verifier.checkPrePublishRaw('eth', current).should.be.false;
+    });
+
+    it('accepts an XRP proposal whose nonce was assigned at publish', function() {
+      const prePublishRaw = Utils.buildTx(xrpTxp()).uncheckedSerialize();
+      const current = xrpTxp({ nonce: 9, prePublishRaw });
+      Verifier.checkPrePublishRaw('xrp', current).should.be.true;
+    });
+
+    it('rejects an XRP proposal whose destination was tampered', function() {
+      const prePublishRaw = Utils.buildTx(xrpTxp()).uncheckedSerialize();
+      const current = xrpTxp({
+        nonce: 9,
+        outputs: [{ toAddress: ATTACKER_XRP, amount: 8000 }],
+        prePublishRaw
+      });
+      Verifier.checkPrePublishRaw('xrp', current).should.be.false;
+    });
+
+    it('rejects an unusable prePublishRaw instead of throwing on it', function() {
+      // the server chooses this value, so it can be any shape, including one that hashes to nothing
+      for (const prePublishRaw of [[], [''], [null], ['', ''], '', [Utils.buildTx(solTxp()).uncheckedSerialize()[0], '']]) {
+        Verifier.checkPrePublishRaw('sol', solTxp({ prePublishRaw })).should.be.false;
+      }
+    });
+
+    it('rejects prePublishRaw on a non-mutable (UTXO) chain', function() {
+      Verifier.checkPrePublishRaw('btc', { chain: 'btc', prePublishRaw: 'anything' }).should.be.false;
     });
   });
 });

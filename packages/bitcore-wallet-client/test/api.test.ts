@@ -65,7 +65,7 @@ describe('client API', function() {
   let clients: Client[], app, sandbox, storage, keys, i;
   let dbConnection;
   let db;
-  this.timeout(Math.max(this['_timeout'], 8000));
+  this.timeout(Math.max(this['_timeout'], 10000));
 
   before(function(done) {
     i = 0;
@@ -1678,6 +1678,35 @@ describe('client API', function() {
           balance.lockedAmount.should.equal(0);
           done();
         });
+      });
+    });
+
+    it('should request balance at a specific time when time is provided', function(done) {
+      clients[0].fromString(
+        k.createCredentials(null, {
+          coin: 'btc',
+          network: 'livenet',
+          account: 0,
+          n: 1
+        })
+      );
+
+      helpers.createAndJoinWallet(clients, keys, 1, 1, {}, () => {
+        const getStub = sinon.stub(clients[0].request, 'get').resolves({ body: { totalAmount: 0 }, header: {} });
+        clients[0]
+          .getBalance({
+            time: '2024-01-01T00:00:00.000Z',
+            tokenAddress: '0xTOKEN'
+          })
+          .then(() => {
+            getStub.calledOnce.should.be.true;
+            const url = getStub.getCall(0).args[0];
+            url.should.contain('/v1/balance/2024-01-01T00%3A00%3A00.000Z/');
+            url.should.contain('tokenAddress=0xTOKEN');
+            getStub.restore();
+            done();
+          })
+          .catch(done);
       });
     });
 
@@ -6242,6 +6271,23 @@ describe('client API', function() {
           }
         });
       }
+
+      it('should default missing derivation settings to BIP45 and non-compliant', () => {
+        const master = new Bitcore.HDPrivateKey({
+          network: 'livenet', depth: 0, parentFingerPrint: 0, childIndex: 0,
+          chainCode: Buffer.alloc(32, 7),
+          privateKey: Buffer.concat([Buffer.alloc(31), Buffer.from([1])])
+        });
+        const xPubKey = master.deriveNonCompliantChild("m/45'").hdPublicKey.toString();
+        const { key, credentials } = Client.upgradeCredentialsV1({
+          network: 'livenet', xPrivKey: master.toString(), xPubKey, m: 1, n: 1
+        });
+
+        credentials.rootPath.should.equal("m/45'");
+        key.BIP45.should.equal(true);
+        key.compliantDerivation.should.equal(false);
+        (key.derive(null, credentials.rootPath).hdPublicKey.toString() === xPubKey).should.equal(true);
+      });
     });
 
     describe('#upgradeMultipleCredentialsV1', () => {

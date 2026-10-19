@@ -37,10 +37,10 @@ const { resolvePackageDir } = require(REAL_HELPER_SOURCE);
 // browser bundle; not the tool-resolution behavior under test.
 const ENGINE_DEPENDENCIES = ['gulp', 'gulp-rename', 'gulp-shell', 'gulp-terser'];
 // The tools index.js itself resolves by package identity, from bitcore-build's
-// own location. nyc/mocha are resolved eagerly by every startGulp() call
-// (not just when test:node actually runs), so fixtures need them present
-// even though these tests never execute test:node itself.
-const HELPER_OWNED_TOOL_DEPENDENCIES = ['browserify', 'karma', '@wdio/cli', 'nyc', 'mocha'];
+// own location. MCR/Mocha are resolved eagerly by every startGulp() call
+// (not just when test:node actually runs). Both coverage execution and
+// browser bundling use these fixtures.
+const HELPER_OWNED_TOOL_DEPENDENCIES = ['browserify', 'karma', '@wdio/cli', 'monocart-coverage-reports', 'mocha'];
 // brfs is the transform browser:maketests passes to browserify (-t brfs).
 // Unlike the tools above, index.js never resolves this by package ownership
 // -- browserify itself resolves transform modules starting from its own

@@ -4,18 +4,22 @@ import * as chai from 'chai';
 import 'chai/register-should';
 import util from 'util';
 import sinon from 'sinon';
+import http from 'http';
+import request from 'request';
 import * as CWC from '@bitpay-labs/crypto-wallet-core';
 import { ChainService } from '../../src/lib/chain/index';
 import config from '../../src/config';
 import { WalletService, UPGRADES } from '../../src/lib/server';
 import { Storage } from '../../src/lib/storage';
 import { Common } from '../../src/lib/common';
+import logger from '../../src/lib/logger';
 import * as Model from '../../src/lib/model';
 import { TssKeyGenModel } from '../../src/lib/model/tsskeygen';
 import { BCHAddressTranslator } from '../../src/lib/bchaddresstranslator';
 import * as TestData from '../testdata';
 import helpers from './helpers';
 import { ClientError } from '../../src/lib/errors/clienterror';
+import { ExpressApp } from '../../src/lib/expressapp';
 
 const should = chai.should();
 config.moralis = config.moralis ?? {
@@ -1662,7 +1666,7 @@ describe('Wallet service', function() {
           message: { partyId: 0, broadcastMessages: [], p2pMessages: [], publicKey: 'dummy', round: 0 },
           n: 1,
           copayerId: legitCopayerId,
-          version: 1.1
+          version: Defaults.TSS_KEYGEN_SCHEME_VERSION
         });
         session.sharedPublicKey = 'dummy-shared-public-key';
         await server.storage.db.collection('tss_keygen').deleteMany({ id: session.id });
@@ -1729,7 +1733,7 @@ describe('Wallet service', function() {
           message: { partyId: 0, broadcastMessages: [], p2pMessages: [], publicKey: 'dummy', round: 0 },
           n: 1,
           copayerId: ancillaryDerivedCopayerId,
-          version: 1.1
+          version: Defaults.TSS_KEYGEN_SCHEME_VERSION
         });
         session.sharedPublicKey = 'dummy-shared-public-key';
         await server.storage.db.collection('tss_keygen').deleteMany({ id: session.id });
@@ -3928,6 +3932,45 @@ describe('Wallet service', function() {
           });
         });
       });
+    });
+  });
+
+  describe('#createTx token allowance', function() {
+    let server: WalletService;
+    let wallet: Model.Wallet;
+
+    beforeEach(async function() {
+      ({ server, wallet } = await helpers.createAndJoinWallet(1, 1, { coin: 'eth' }));
+      await util.promisify(server.createAddress).call(server, {});
+    });
+
+    it('should reject a total that a number rounds down to the allowance', async function() {
+      const be = helpers.getBlockchainExplorer();
+      be.getBalance = sinon.stub().callsArgWith(1, null, { unconfirmed: 0, confirmed: '1' + '0'.repeat(20), balance: '1' + '0'.repeat(20) });
+      be.getTokenAllowance = sinon.stub().callsArgWith(1, null, '9007199254740992');
+
+      const opts = {
+        outputs: [
+          { toAddress: '0x37d7B3bBD88EFdE6a93cF74D2F5b0385D3E3B08A', amount: '9007199254740992' },
+          { toAddress: '0x37d7B3bBD88EFdE6a93cF74D2F5b0385D3E3B08A', amount: '1' }
+        ],
+        from: '0xE299d49C2cf9BfaFb7C6E861E80bb8c83f961622',
+        tokenAddress: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
+        multiSendContractAddress: '0x30e5bfa1e83c9c6f0a4c4bd4a1f0e0d7d0c4d3a2',
+        feePerKb: 25000000000,
+        nonce: 5
+      };
+
+      let error;
+      try {
+        await util.promisify(server.createTx).call(server, opts);
+      } catch (e) {
+        error = e;
+      }
+
+      should.exist(error);
+      error.message.should.contain('Insufficient token allowance');
+      error.message.should.contain('Want: 9007199254740993');
     });
   });
 
@@ -8386,6 +8429,66 @@ describe('Wallet service', function() {
       txp.nonce.should.equal('5');
     });
 
+    describe('republishing a txp with mutable tx data', function() {
+      let txp, publishOpts;
+
+      beforeEach(async function() {
+        txp = await util.promisify(server.createTx).call(server, {
+          outputs: [{ toAddress: ETH_ADDR, amount: 8000 }],
+          feePerKb: 123e2,
+          from: fromAddr,
+          deferNonce: true
+        });
+        publishOpts = helpers.getProposalSignatureOpts(txp, TestData.copayers[0].privKey_1H_0);
+        await util.promisify(server.publishTx).call(server, publishOpts);
+      });
+
+      const setStatus = async status => {
+        const stored = await util.promisify(server.storage.fetchTx).call(server.storage, wallet.id, txp.id);
+        stored.status = status;
+        await util.promisify(server.storage.storeTx).call(server.storage, wallet.id, stored);
+      };
+
+      const republishError = async () => {
+        try {
+          await util.promisify(server.publishTx).call(server, publishOpts);
+        } catch (err) {
+          return err;
+        }
+      };
+
+      it('should republish a pending txp', async function() {
+        should.not.exist(await republishError());
+        const stored = await util.promisify(server.storage.fetchTx).call(server.storage, wallet.id, txp.id);
+        stored.status.should.equal('pending');
+      });
+
+      it('should not republish a broadcasted txp back to pending', async function() {
+        await setStatus('broadcasted');
+        const err = await republishError();
+        should.exist(err);
+        err.code.should.equal('TX_ALREADY_BROADCASTED');
+        const stored = await util.promisify(server.storage.fetchTx).call(server.storage, wallet.id, txp.id);
+        stored.status.should.equal('broadcasted');
+      });
+
+      it('should not republish an accepted txp back to pending', async function() {
+        await setStatus('accepted');
+        const err = await republishError();
+        should.exist(err);
+        err.code.should.equal('TX_NOT_PENDING');
+        const stored = await util.promisify(server.storage.fetchTx).call(server.storage, wallet.id, txp.id);
+        stored.status.should.equal('accepted');
+      });
+
+      it('should not republish a rejected txp back to pending', async function() {
+        await setStatus('rejected');
+        const err = await republishError();
+        should.exist(err);
+        err.code.should.equal('TX_NOT_PENDING');
+      });
+    });
+
     it('should publish a deferred-nonce txp and save prePublishRaw', async function() {
       const txOpts = {
         outputs: [{ toAddress: ETH_ADDR, amount: 8000 }],
@@ -8818,6 +8921,85 @@ describe('Wallet service', function() {
       result.nonce.should.equal(5);
       // future: result.gasPrice, result.maxFee would also be set here
     });
+
+    describe('prePublishRaw binding (isPrePublishRawBound)', function() {
+      const ATTACKER_ADDR = '0x1111111111111111111111111111111111111111';
+
+      it('accepts prePublishRaw when only the mutable field (nonce) changed', async function() {
+        blockchainExplorer.getTransactionCount = sinon.stub().callsArgWith(1, null, '42');
+        const created = await helpers.createAndPublishTx(server, {
+          outputs: [{ toAddress: ETH_ADDR, amount: 8000 }],
+          feePerKb: 123e2, from: fromAddr, deferNonce: true
+        }, TestData.copayers[0].privKey_1H_0);
+
+        // Server assigns the JIT nonce -> the stored tx now differs from prePublishRaw only in the nonce.
+        await util.promisify(server.prepareTx).call(server, { txProposalId: created.id });
+        const withNonce = await util.promisify(server.getTx).call(server, { txProposalId: created.id });
+        should.exist(withNonce.prePublishRaw);
+        withNonce.nonce.should.equal(42);
+
+        ChainService.isPrePublishRawBound(withNonce).should.equal(true);
+      });
+
+      it('rejects prePublishRaw when the destination was tampered', async function() {
+        const created = await helpers.createAndPublishTx(server, {
+          outputs: [{ toAddress: ETH_ADDR, amount: 8000 }],
+          feePerKb: 123e2, from: fromAddr, deferNonce: true
+        }, TestData.copayers[0].privKey_1H_0);
+
+        const txp = await util.promisify(server.getTx).call(server, { txProposalId: created.id });
+        should.exist(txp.prePublishRaw);
+        ChainService.isPrePublishRawBound(txp).should.equal(true); // bound before tampering
+        txp.outputs[0].toAddress = ATTACKER_ADDR; // swap payee, keep prePublishRaw + proposalSignature
+        ChainService.isPrePublishRawBound(txp).should.equal(false);
+      });
+
+      it('rejects a prePublishRaw that holds no usable raw tx', async function() {
+        const created = await helpers.createAndPublishTx(server, {
+          outputs: [{ toAddress: ETH_ADDR, amount: 8000 }],
+          feePerKb: 123e2, from: fromAddr, deferNonce: true
+        }, TestData.copayers[0].privKey_1H_0);
+
+        const txp = await util.promisify(server.getTx).call(server, { txProposalId: created.id });
+        const warn = sinon.spy(logger, 'warn');
+        try {
+          // an empty list is truthy, so it has to be refused up front rather than handed to the tx
+          // provider, which would fail the same check by throwing
+          for (const prePublishRaw of [[], [''], ['', '']]) {
+            txp.prePublishRaw = prePublishRaw;
+            ChainService.isPrePublishRawBound(txp).should.equal(false);
+          }
+          warn.called.should.equal(false);
+        } finally {
+          warn.restore();
+        }
+      });
+
+      it('rejects the publishTx fallback when the stored proposal was tampered', async function() {
+        blockchainExplorer.getTransactionCount = sinon.stub().callsArgWith(1, null, '7');
+        const created = await util.promisify(server.createTx).call(server, {
+          outputs: [{ toAddress: ETH_ADDR, amount: 8000 }],
+          feePerKb: 123e2, from: fromAddr, deferNonce: true
+        });
+        const publishOpts = helpers.getProposalSignatureOpts(created, TestData.copayers[0].privKey_1H_0);
+        await util.promisify(server.publishTx).call(server, publishOpts);
+
+        // Assign the nonce so a re-publish must fall back to prePublishRaw...
+        await util.promisify(server.prepareTx).call(server, { txProposalId: created.id });
+        // ...then tamper the stored destination and replay the original (still-valid) proposalSignature.
+        const stored = await util.promisify(server.storage.fetchTx).call(server.storage, wallet.id, created.id);
+        should.exist(stored.prePublishRaw);
+        stored.outputs[0].toAddress = ATTACKER_ADDR;
+        await util.promisify(server.storage.storeTx).call(server.storage, wallet.id, stored);
+
+        let err;
+        try {
+          await util.promisify(server.publishTx).call(server, publishOpts);
+        } catch (e) { err = e; }
+        should.exist(err);
+        err.message.should.contain('Invalid proposal signature');
+      });
+    });
   });
 
   describe('#prepareTx XRP (deferred nonce)', function() {
@@ -8908,6 +9090,20 @@ describe('Wallet service', function() {
         signatures
       });
       signed.status.should.equal('accepted');
+    });
+
+    it('rejects prePublishRaw binding when an XRP destination was tampered', async function() {
+      const ATTACKER_XRP = 'rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe';
+      const created = await helpers.createAndPublishTx(server, {
+        outputs: [{ toAddress: XRP_ADDR, amount: 8000 }],
+        feePerKb: 123e2, from: fromAddr, deferNonce: true
+      }, TestData.copayers[0].privKey_1H_0);
+
+      const txp = await util.promisify(server.getTx).call(server, { txProposalId: created.id });
+      should.exist(txp.prePublishRaw);
+      ChainService.isPrePublishRawBound(txp).should.equal(true); // untampered baseline
+      txp.outputs[0].toAddress = ATTACKER_XRP;
+      ChainService.isPrePublishRawBound(txp).should.equal(false);
     });
   });
 
@@ -9529,8 +9725,236 @@ describe('Wallet service', function() {
     });
     
     it.skip('should get accepted/rejected transaction proposal', function(done) { });
-    
+
     it.skip('should get broadcasted transaction proposal', function(done) { });
+  });
+
+  describe('#getTxByHash', function() {
+    let serverA: WalletService;
+    let walletA: Model.Wallet;
+    let serverB: WalletService;
+    let txp;
+
+    beforeEach(async function() {
+      ({ server: serverA, wallet: walletA } = await helpers.createAndJoinWallet(1, 1));
+      await helpers.stubUtxos(serverA, walletA, 1);
+      const txOpts = {
+        outputs: [{
+          toAddress: '18PzpUFkFZE8zKWUPvfykkTxmB9oMR8qP7',
+          amount: 0.5e8
+        }],
+        feePerKb: 100e2,
+        message: 'some message',
+      };
+      txp = await helpers.createAndPublishTx(serverA, txOpts, TestData.copayers[0].privKey_1H_0);
+      should.exist(txp);
+
+      const signatures = helpers.clientSign(txp, TestData.copayers[0].xPrivKey_44H_0H_0H);
+      txp = await util.promisify(serverA.signTx).call(serverA, {
+        txProposalId: txp.id,
+        signatures,
+      });
+      should.exist(txp.txid);
+
+      ({ server: serverB } = await helpers.createAndJoinWallet(1, 1, { offset: 1 }));
+    });
+
+    it('should not disclose another wallet\'s transaction proposal by hash', function(done) {
+      serverB.getTxByHash({
+        txid: txp.txid
+      }, function(err, res) {
+        should.exist(err);
+        should.not.exist(res);
+        err.should.be.instanceof(ClientError);
+        err.code.should.equal('TX_NOT_FOUND');
+        err.message.should.equal('Transaction proposal not found');
+        // Belt-and-suspenders: confirm the error itself carries none of
+        // wallet A's data (no walletId/creatorId/raw leaking via the error).
+        JSON.stringify(err).should.not.include(walletA.id);
+        done();
+      });
+    });
+
+    it('should get own transaction proposal by hash, unchanged from before the fix', function(done) {
+      serverA.editTxNote({
+        txid: txp.txid,
+        body: 'a note from wallet A'
+      }, function(err) {
+        should.not.exist(err);
+        serverA.getTxByHash({
+          txid: txp.txid
+        }, function(err, res) {
+          should.not.exist(err);
+          should.exist(res);
+          res.id.should.equal(txp.id);
+          res.walletId.should.equal(walletA.id);
+          res.txid.should.equal(txp.txid);
+          should.exist(res.raw);
+          should.exist(res.note);
+          res.note.body.should.equal('a note from wallet A');
+          done();
+        });
+      });
+    });
+
+    it('should return the identical not-found error for a foreign txid and an unknown txid', function(done) {
+      serverB.getTxByHash({
+        txid: txp.txid
+      }, function(errForeign, resForeign) {
+        should.exist(errForeign);
+        should.not.exist(resForeign);
+        serverB.getTxByHash({
+          txid: helpers.randomTXID()
+        }, function(errUnknown, resUnknown) {
+          should.exist(errUnknown);
+          should.not.exist(resUnknown);
+          errForeign.code.should.equal(errUnknown.code);
+          errForeign.message.should.equal(errUnknown.message);
+          errForeign.code.should.equal('TX_NOT_FOUND');
+          done();
+        });
+      });
+    });
+
+    it('should return a bad-request error when txid is missing', function(done) {
+      serverA.getTxByHash({}, function(err, res) {
+        should.exist(err);
+        should.not.exist(res);
+        err.should.be.instanceof(ClientError);
+        err.code.should.equal('BADREQUEST');
+        err.message.should.equal('Required argument: txid missing.');
+        done();
+      });
+    });
+  });
+
+  describe('GET /v1/txproposalsbyhash/:id/ (HTTP route)', function() {
+    // Exercises the real Express route (registerTransactionRoutes ->
+    // getServerWithAuth -> WalletService.getInstanceWithAuth), not just the
+    // service method, so route wiring, request-auth plumbing, and HTTP
+    // status/body serialization are covered, not only the underlying
+    // service logic already tested above. Only the cryptographic signature
+    // check is stubbed to return true
+    const testHost = 'http://127.0.0.1';
+    let testPort: number;
+    let httpServer;
+    let verifyStub;
+    let walletA: Model.Wallet;
+    let walletB: Model.Wallet;
+    let txp;
+
+    beforeEach(async function() {
+      httpServer = undefined;
+      verifyStub = undefined;
+
+      let serverA: WalletService;
+      let serverB: WalletService;
+      ({ server: serverA, wallet: walletA } = await helpers.createAndJoinWallet(1, 1));
+      await helpers.stubUtxos(serverA, walletA, 1);
+      const txOpts = {
+        outputs: [{
+          toAddress: '18PzpUFkFZE8zKWUPvfykkTxmB9oMR8qP7',
+          amount: 0.5e8
+        }],
+        feePerKb: 100e2,
+        message: 'some message',
+      };
+      txp = await helpers.createAndPublishTx(serverA, txOpts, TestData.copayers[0].privKey_1H_0);
+      const signatures = helpers.clientSign(txp, TestData.copayers[0].xPrivKey_44H_0H_0H);
+      txp = await util.promisify(serverA.signTx).call(serverA, {
+        txProposalId: txp.id,
+        signatures,
+      });
+      should.exist(txp.txid);
+
+      ({ server: serverB, wallet: walletB } = await helpers.createAndJoinWallet(1, 1, { offset: 1 }));
+
+      verifyStub = sinon.stub(WalletService.prototype, '_verifySignature').returns(true);
+
+      const app = new ExpressApp();
+      httpServer = new http.Server(app.app);
+      await util.promisify(app.start).call(app, {
+        storage: helpers.getStorage(),
+        blockchainExplorer: helpers.getBlockchainExplorer(),
+        request: sinon.stub(),
+        disableLogs: true,
+        basePath: config.basePath
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        httpServer.once('error', reject);
+        httpServer.listen(0, '127.0.0.1', () => {
+          httpServer.off('error', reject);
+          const address = httpServer.address();
+          if (!address || typeof address === 'string') {
+            return reject(new Error('HTTP test server did not bind to a TCP port'));
+          }
+          testPort = address.port;
+          resolve();
+        });
+      });
+    });
+
+    afterEach(function(done) {
+      if (verifyStub) {
+        verifyStub.restore();
+        verifyStub = undefined;
+      }
+      if (!httpServer?.listening) {
+        httpServer = undefined;
+        return done();
+      }
+      httpServer.close(err => {
+        httpServer = undefined;
+        done(err);
+      });
+    });
+
+    function getByHash(copayerId, txid, cb) {
+      request({
+        method: 'GET',
+        url: testHost + ':' + testPort + config.basePath + '/v1/txproposalsbyhash/' + txid + '/',
+        headers: {
+          'x-identity': copayerId,
+          'x-signature': 'stubbed'
+        },
+        json: true
+      }, (err, res, body) => cb(err, res, body));
+    }
+
+    it('foreign wallet gets HTTP 400 TX_NOT_FOUND with no owner data in the body', function(done) {
+      getByHash(walletB.copayers[0].id, txp.txid, (err, res, body) => {
+        should.not.exist(err);
+        res.statusCode.should.equal(400);
+        body.code.should.equal('TX_NOT_FOUND');
+        JSON.stringify(body).should.not.include(walletA.id);
+        done();
+      });
+    });
+
+    it('owner wallet gets HTTP 200 with the full proposal, unchanged', function(done) {
+      getByHash(walletA.copayers[0].id, txp.txid, (err, res, body) => {
+        should.not.exist(err);
+        res.statusCode.should.equal(200);
+        body.walletId.should.equal(walletA.id);
+        body.txid.should.equal(txp.txid);
+        should.exist(body.raw);
+        done();
+      });
+    });
+
+    it('foreign and unknown txids produce an identical HTTP 400 TX_NOT_FOUND body', function(done) {
+      getByHash(walletB.copayers[0].id, txp.txid, (err, resForeign, bodyForeign) => {
+        should.not.exist(err);
+        getByHash(walletB.copayers[0].id, helpers.randomTXID(), (err, resUnknown, bodyUnknown) => {
+          should.not.exist(err);
+          resForeign.statusCode.should.equal(resUnknown.statusCode);
+          bodyForeign.code.should.equal(bodyUnknown.code);
+          bodyForeign.code.should.equal('TX_NOT_FOUND');
+          done();
+        });
+      });
+    });
   });
 
   describe('#getTxs', function() {

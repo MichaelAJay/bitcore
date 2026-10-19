@@ -104,6 +104,7 @@ export default defineConfig([
       'packages/bitcore-lib*/**/*.js',
       'packages/bitcore-p2p*/**/*.js',
       'packages/bitcore-tss/**/*.js',
+      'packages/bitcore-build/**/*.js'
     ],
     languageOptions: { sourceType: 'commonjs' },
     rules: {

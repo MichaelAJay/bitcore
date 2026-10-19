@@ -2,7 +2,7 @@
   "name": "@bitpay-labs/bitcore-cli",
   "description": "A Bitcore CLI Wallet",
   "author": "BitPay, Inc",
-  "version": "11.10.7",
+  "version": "11.10.12",
   "licence": "MIT",
   "private": true,
   "keywords": [
@@ -32,7 +32,7 @@
     "bitcore-cli": "./bin/bitcore-cli"
   },
   "scripts": {
-    "test": "npm run compile && node copyTestWallets && nyc mocha 'build/test/**/*.js'",
+    "test": "npm run compile && node copyTestWallets && mcr mocha build/test",
     "build": "tsc",
     "build:prod": "tsc -p tsconfig.prod.json",
     "clean": "rm -rf ./build",
@@ -43,21 +43,22 @@
     "fix": "npm run fix:errors"
   },
   "dependencies": {
-    "@bitpay-labs/bitcore-mnemonic": "^11.10.4",
-    "@bitpay-labs/bitcore-wallet-client": "^11.10.7",
-    "@bitpay-labs/crypto-wallet-core": "^11.10.4",
+    "@bitpay-labs/bitcore-mnemonic": "^11.10.12",
+    "@bitpay-labs/bitcore-wallet-client": "^11.10.12",
+    "@bitpay-labs/crypto-wallet-core": "^11.10.12",
     "@clack/prompts": "1.5.1",
     "commander": "14.0.0",
     "external-editor": "3.1.0"
   },
   "devDependencies": {
-    "@bitpay-labs/bitcore-wallet-service": "^11.10.7",
+    "@bitpay-labs/bitcore-wallet-service": "^11.10.12",
     "@types/chai": "5.2.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.14.1",
     "@types/sinon": "^22.0.0",
     "chai": "^5.2.1",
     "mongodb": "^3.5.9",
+    "monocart-coverage-reports": "^2.13.0",
     "sinon": "^21.0.0",
     "source-map-support": "0.5.16",
     "supertest": "^7.2.2",

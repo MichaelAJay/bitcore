@@ -326,12 +326,9 @@ export class WalletService implements IWalletService {
     );
   }
 
-  static handleIncomingNotifications(notification, cb) {
-    cb = cb || function() { };
-
+  static handleIncomingNotifications(_notification: INotification) {
     // do nothing here....
     // bc height cache is cleared on bcmonitor
-    return cb();
   }
 
   static shutDown(cb) {
@@ -472,6 +469,13 @@ export class WalletService implements IWalletService {
       throw new Error('Storage requested before server was initialized');
     }
     return storage;
+  }
+
+  static getMessageBroker() {
+    if (!initialized) {
+      throw new Error('Message broker requested before server was initialized');
+    }
+    return messageBroker;
   }
 
   _runLocked(cb, task, waitTime?: number) {
@@ -1152,7 +1156,7 @@ export class WalletService implements IWalletService {
         try {
           const isValid = this._verifyRequestPubKey(opts.requestPubKey, opts.signature, target.xPubKey);
           if (!isValid) return cb(Errors.NOT_AUTHORIZED);
-        } catch (e) {
+        } catch {
           return cb(Errors.NOT_AUTHORIZED);
         }
 
@@ -2089,6 +2093,44 @@ export class WalletService implements IWalletService {
   }
 
   /**
+   * Get wallet balance at a specific time.
+   * @param {Object} opts
+   * @param {string} opts.time - Date or time accepted by the bitcore-node API.
+   * @returns {Object} balance - The chain-state provider balance at the requested time.
+   */
+  getBalanceAtTime(opts, cb) {
+    opts = opts || {};
+    if (!opts.time) {
+      return cb(new ClientError('time is required in getBalanceAtTime'));
+    }
+    let wallet = opts.wallet;
+
+    const setWallet = cb1 => {
+      if (wallet) return cb1();
+      this.getWallet({}, (err, ret) => {
+        if (err) return cb(err);
+        wallet = ret;
+        return cb1(null, wallet);
+      });
+    };
+
+    setWallet(() => {
+      if (!wallet.isComplete()) {
+        return cb(null, { confirmed: 0, unconfirmed: 0, balance: 0 });
+      }
+
+      this.syncWallet(wallet, err => {
+        if (err) return cb(err);
+        const bc = this._getBlockchainExplorer(wallet.chain, wallet.network);
+        if (!bc) {
+          return cb(new Error('Could not get blockchain explorer instance'));
+        }
+        return bc.getBalanceAtTime({ ...wallet, tokenAddress: opts.tokenAddress }, opts.time, cb);
+      });
+    });
+  }
+
+  /**
    * Return info needed to send all funds in the wallet
    * @param {Object} opts
    * @param {number} opts.feeLevel[='normal'] - Optional. Specify the fee level for this TX ('priority', 'normal', 'economy', 'superEconomy') as defined in Defaults.FEE_LEVELS.
@@ -2990,8 +3032,8 @@ export class WalletService implements IWalletService {
                     spenderAddress: txp.multiSendContractAddress
                   }, (err, allowance) => {
                     if (err) { return next(err); }
-                    if (BigInt(allowance) < BigInt(txp.getTotalAmount())) {
-                      return next(new Error(`Insufficient token allowance. Allowed: ${BigInt(allowance)}, Want: ${BigInt(txp.getTotalAmount())}`));
+                    if (BigInt(allowance) < txp.getTotalAmountBigInt()) {
+                      return next(new Error(`Insufficient token allowance. Allowed: ${BigInt(allowance)}, Want: ${txp.getTotalAmountBigInt()}`));
                     }
                     return next();
                   });
@@ -3066,6 +3108,9 @@ export class WalletService implements IWalletService {
           if (err) return cb(err);
           if (!txp) return cb(Errors.TX_NOT_FOUND);
           if (!txp.isTemporary() && !txp.hasMutableTxData()) return cb(null, txp);
+          // Broadcasted proposals should not be published again. Only temporary or pending proposals can be published.
+          if (txp.isBroadcasted()) return cb(Errors.TX_ALREADY_BROADCASTED);
+          if (!txp.isTemporary() && txp.status !== 'pending') return cb(Errors.TX_NOT_PENDING);
 
           const copayer = wallet.getCopayer(this.copayerId);
 
@@ -3078,8 +3123,12 @@ export class WalletService implements IWalletService {
 
           let signingKey = this._getSigningKey(raw, opts.proposalSignature, copayer.requestPubKeys);
           if (!signingKey) {
-            // If the txp has been published previously, we will verify the signature against the previously published raw tx
-            if (txp.hasMutableTxData() && txp.prePublishRaw) {
+            // The signature didn't match the current (refreshed) raw tx. Fall back to the previously-published
+            // raw tx -- but only if it is bound to THIS proposal (differs from the current tx solely in the
+            // field BWS mutates at publish: blockhash/nonce). Without that check a tampered stored proposal
+            // could reuse an old, still-valid proposalSignature over prePublishRaw. Mirrors the client
+            // Verifier.checkPrePublishRaw guard.
+            if (txp.hasMutableTxData() && txp.prePublishRaw && ChainService.isPrePublishRawBound(txp)) {
               raw = txp.prePublishRaw;
               signingKey = this._getSigningKey(raw, opts.proposalSignature, copayer.requestPubKeys);
             }
@@ -3154,7 +3203,14 @@ export class WalletService implements IWalletService {
    * @returns {Object} txProposal
    */
   getTxByHash(opts, cb) {
-    this.storage.fetchTxByHash(opts.txid, (err, txp) => {
+    if (!checkRequired(opts, 'txid', cb)) return;
+
+    // Scoped to this.walletId: the global storage.fetchTxByHash
+    // would return any wallet's TxProposal for a known txid, disclosing a
+    // foreign wallet's proposal data to any authenticated copayer. The
+    // internal global consumers (BlockchainMonitor, getWalletFromIdentifier)
+    // are unaffected; they keep calling storage.fetchTxByHash directly.
+    this.storage.fetchTxByHashForWallet(this.walletId, opts.txid, (err, txp) => {
       if (err) return cb(err);
       if (!txp) return cb(Errors.TX_NOT_FOUND);
 
@@ -3850,7 +3906,7 @@ export class WalletService implements IWalletService {
           const notifications = res
             .flat()
             .map((n: INotification) => ({ ...n, walletId: this.walletId }))
-            .sort((a, b) => a.id - b.id);
+            .sort((a, b) => a.id?.toString()?.localeCompare(b.id?.toString()));
 
           return cb(null, notifications);
         }

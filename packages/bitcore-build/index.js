@@ -145,16 +145,11 @@ function startGulp(name, opts) {
 
   //  task['plato']= shell.task([platoPath + ' -d report -r -l .jshintrc -t ' + fullname + ' lib']);
 
-  // Resolved from bitcore-build's own location, same as the browser tools
-  // above: gulp-shell only ever prepends the *consumer's* node_modules/.bin
-  // to PATH, so a bare 'nyc mocha' name would depend on some ancestor
-  // process (typically the outer `npm run` invocation) having already put
-  // the right nyc/mocha on PATH -- fragile, and could silently pick up a
-  // different, unrelated nyc/mocha earlier on PATH than the ones this
-  // package actually declares and validates its tests against.
-  const nycPath = quote(resolveBin('nyc'));
+  // Resolve both CLIs from the helper's own dependencies, independently of
+  // the consuming package's PATH or workspace installation layout.
+  const coveragePath = quote(resolveBin('monocart-coverage-reports', 'mcr'));
   const mochaPath = quote(resolveBin('mocha'));
-  task['test:node'] = shell.task([nycPath + ' ' + mochaPath + ' -- --recursive']);
+  task['test:node'] = shell.task([coveragePath + ' ' + mochaPath + ' --exit --recursive']);
 
   /**
    * watch tasks
