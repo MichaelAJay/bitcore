@@ -25,7 +25,7 @@ export async function joinThresholdSigWallet(
     key = new Key({ seedType: 'new', password });
   }
 
-  const tss = new TssKey.TssKeyGen({
+  const tss = new TssKey.TssKeyGenRecipient({
     chain,
     network,
     baseUrl: url.resolve(opts.host, '/bws/api'),
