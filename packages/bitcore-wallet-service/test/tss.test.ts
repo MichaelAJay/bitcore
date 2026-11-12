@@ -167,6 +167,368 @@ describe('TSS session subscriptions', function() {
 
 });
 
+describe('KeyGen admission', function() {
+  const sandbox = sinon.createSandbox();
+  let TssKeyGen: typeof import('../src/lib/tss').TssKeyGen;
+  let storage: Storage;
+  let updateOne: sinon.SinonStub;
+  let insertOne: sinon.SinonStub;
+  let countDocuments: sinon.SinonStub;
+  let brokerSend: sinon.SinonStub;
+  let fetchSession: sinon.SinonStub;
+
+  const N = 3;
+  const broadcast = (partyId: number, round = 0, publicKey = 'key' + partyId) => ({
+    round, partyId, publicKey,
+    broadcastMessages: [{ from: partyId, payload: { message: 'm', signature: 's' } }],
+    p2pMessages: []
+  });
+  const p2p = (partyId: number, round = 1, publicKey = 'key' + partyId) => ({
+    round, partyId, publicKey,
+    broadcastMessages: [],
+    p2pMessages: [0, 1, 2].filter(to => to !== partyId).map(to => ({
+      from: partyId, to, commitment: 'c', payload: { encryptedMessage: 'e', signature: 's' }
+    }))
+  });
+  const makeSession = (opts: { version?: number; joined?: number[]; registered?: number[]; participants?: string[] } = {}) => {
+    const { version = 1.1, joined = [], registered = [] } = opts;
+    const session = Object.assign(new TssKeyGenModel(), {
+      id: 'session',
+      n: N,
+      schemeVersion: version,
+      participants: opts.participants ?? ['alice', null, null],
+      authPublicKeys: ['key0', null, null],
+      rounds: [[{ fromPartyId: 0, messages: broadcast(0) }]],
+      __v: 0
+    });
+    for (const partyId of registered) session.authPublicKeys[partyId] = 'key' + partyId;
+    for (const partyId of joined) {
+      session.authPublicKeys[partyId] = 'key' + partyId;
+      session.participants[partyId] = ['alice', 'bob', 'carol'][partyId];
+      session.rounds[0].push({ fromPartyId: partyId, messages: broadcast(partyId) });
+    }
+    return session;
+  };
+  const submit = (message: any, copayerId = 'bob', extra: { version?: number; password?: string } = {}) =>
+    TssKeyGen.processMessage({ id: 'session', message, copayerId, version: extra.version ?? 1.1, password: extra.password });
+  const rejection = (p: Promise<any>) => p.then(() => undefined, err => err);
+  /** Writes that reached the database, whatever the storage method that issued them */
+  const writes = () => updateOne.getCalls().concat(insertOne.getCalls());
+  const expectRefused = async (p: Promise<any>) => {
+    const err = await rejection(p);
+    expect(err, 'expected a rejection').to.not.equal(undefined);
+    expect(err).to.not.be.instanceOf(TypeError);
+    expect(writes(), 'a write reached the database').to.have.length(0);
+    expect(brokerSend.called, 'a notification was published').to.equal(false);
+    return err;
+  };
+
+  before(async function() {
+    ({ TssKeyGen } = await import('../src/lib/tss'));
+  });
+
+  beforeEach(function() {
+    storage = new Storage();
+    updateOne = sandbox.stub().resolves({ result: { ok: 1 }, matchedCount: 1 });
+    insertOne = sandbox.stub().resolves({ result: { ok: 1 } });
+    countDocuments = sandbox.stub().resolves(1);
+    (storage as any).db = { collection: () => ({ updateOne, insertOne, countDocuments }) };
+    brokerSend = sandbox.stub();
+    sandbox.stub(WalletService, 'getStorage').returns(storage);
+    sandbox.stub(WalletService, 'getMessageBroker').returns({ send: brokerSend } as any);
+    fetchSession = sandbox.stub(storage, 'fetchTssKeyGenSession').resolves(makeSession());
+  });
+
+  afterEach(function() {
+    sandbox.restore();
+  });
+
+  describe('direct service boundaries', function() {
+    it('should reject a partyId equal to n before any write', async function() {
+      await expectRefused(submit(broadcast(N)));
+    });
+
+    it('should reject a non-canonical partyId before any write', async function() {
+      await expectRefused(submit(broadcast(NaN)));
+    });
+
+    it('should reject a p2p recipient equal to n before any write', async function() {
+      fetchSession.resolves(makeSession({ joined: [1, 2] }));
+      const message = p2p(1);
+      message.p2pMessages[0].to = N;
+      await expectRefused(submit(message));
+    });
+
+    it('should reject a later-round message for a vacant slot without enrolling it', async function() {
+      await expectRefused(submit(p2p(1)));
+    });
+
+    it('should reject a round 0 message for a vacant slot whose round 0 message exists', async function() {
+      const session = makeSession({ joined: [1] });
+      session.participants[1] = null;
+      fetchSession.resolves(session);
+      await expectRefused(submit(broadcast(1)));
+    });
+  });
+
+  describe('ownership and key binding', function() {
+    it('should reject another copayer for an enrolled slot', async function() {
+      fetchSession.resolves(makeSession({ joined: [1] }));
+      await expectRefused(submit(broadcast(1), 'mallory'));
+    });
+
+    it('should reject an enrolled copayer claiming a second slot', async function() {
+      fetchSession.resolves(makeSession({ joined: [1] }));
+      await expectRefused(submit(broadcast(2), 'bob'));
+    });
+
+    it('should reject an enrolled sender submitting a different wrapper key', async function() {
+      fetchSession.resolves(makeSession({ joined: [1, 2] }));
+      await expectRefused(submit(p2p(1, 1, 'other-key'), 'bob'));
+    });
+
+    it('should reject an enrolled sender with no round 0 message to bind its key to', async function() {
+      const session = makeSession();
+      session.participants[1] = 'bob';
+      session.authPublicKeys[1] = 'key1';
+      fetchSession.resolves(session);
+      await expectRefused(submit(broadcast(1)));
+    });
+
+    it('should reject an enrolled v1.2 sender whose round 0 key is not the registered key', async function() {
+      const session = makeSession({ version: 1.2, joined: [1, 2] });
+      session.authPublicKeys[1] = 'registered-elsewhere';
+      fetchSession.resolves(session);
+      await expectRefused(submit(p2p(1), 'bob', { version: 1.2 }));
+    });
+
+    it('should reject an enrolled sender whose round 0 key is ambiguous', async function() {
+      const session = makeSession({ joined: [1, 2] });
+      session.rounds[0].push({ fromPartyId: 1, messages: broadcast(1, 0, 'key1') });
+      fetchSession.resolves(session);
+      await expectRefused(submit(p2p(1)));
+    });
+
+    it('should accept an enrolled sender carrying its enrolled key', async function() {
+      fetchSession.resolves(makeSession({ joined: [1, 2] }));
+      await submit(p2p(1));
+      expect(brokerSend.calledOnce).to.equal(true);
+    });
+
+    it('should reject a v1.2 joiner whose key is not the registered key for the slot', async function() {
+      fetchSession.resolves(makeSession({ version: 1.2, registered: [1] }));
+      await expectRefused(submit(broadcast(1, 0, 'other-key'), 'bob', { version: 1.2 }));
+    });
+
+    it('should reject a wrong join password', async function() {
+      const session = makeSession();
+      session.joinPassword = 'not-the-hash';
+      fetchSession.resolves(session);
+      await expectRefused(submit(broadcast(1), 'bob', { password: 'wrong' }));
+    });
+  });
+
+  describe('atomic admission', function() {
+    it('should commit an enrollment and its first message with one write', async function() {
+      await submit(broadcast(1));
+      expect(writes(), 'enrollment and message must share one write').to.have.length(1);
+      expect(brokerSend.calledOnce).to.equal(true);
+    });
+
+    it('should not leave a participant enrolled when the message cannot be stored', async function() {
+      const committed: any[] = [];
+      updateOne.callsFake(async (_filter, update) => {
+        if (update.$push) throw new Error('injected failure');
+        committed.push(update);
+        return { result: { ok: 1 }, matchedCount: 1 };
+      });
+      const err = await rejection(submit(broadcast(1)));
+      expect(err?.message).to.equal('injected failure');
+      expect(committed, 'a write succeeded without the message').to.have.length(0);
+      expect(brokerSend.called).to.equal(false);
+    });
+  });
+
+  describe('session creation', function() {
+    const create = (n: any) => {
+      fetchSession.resolves(null);
+      return TssKeyGen.processMessage({ id: 'session', message: broadcast(0), n, copayerId: 'alice', version: 1.1 });
+    };
+
+    for (const [name, n] of [['zero', 0], ['negative', -1], ['not a number', 'abc'], ['missing', undefined], ['NaN', NaN],
+      ['past the array length limit', 2 ** 32], ['past the safe integer range', 2 ** 53], ['a numeric string past the limit', '4294967296']] as Array<[string, any]>) {
+      it(`should reject a participant count that is ${name}`, async function() {
+        const err = await rejection(create(n));
+        expect(err?.code).to.equal('TSS_GENERIC_ERROR');
+        expect(writes()).to.have.length(0);
+      });
+    }
+
+    for (const [name, n] of [['a number', 3], ['a numeric string', '3']] as Array<[string, any]>) {
+      it(`should create a session with a participant count given as ${name}`, async function() {
+        await create(n);
+        expect(insertOne.calledOnce).to.equal(true);
+        expect(insertOne.firstCall.args[0].participants).to.have.length(3);
+      });
+    }
+
+    it('should reject a session whose first message is not party 0 round 0', async function() {
+      fetchSession.resolves(null);
+      for (const message of [broadcast(1), broadcast(0, 1), { ...broadcast(0), partyId: '0' }]) {
+        const err = await rejection(TssKeyGen.processMessage({ id: 'session', message: message as any, n: 3, copayerId: 'alice', version: 1.1 }));
+        expect(err).to.not.equal(undefined);
+      }
+      expect(writes()).to.have.length(0);
+    });
+  });
+
+  describe('party registration conflicts', function() {
+    const register = (partyId: any = 1, partyPubKey = new BitcoreLib.PrivateKey().publicKey.toString()) =>
+      TssKeyGen.registerParty({ id: 'session', copayerId: 'alice', data: { partyId, partyPubKey } });
+    const statesInOrder = (...states: any[]) => {
+      fetchSession.callsFake(async () => states.length > 1 ? states.shift() : states[0]);
+    };
+    const conflictOnce = () => updateOne.onFirstCall().resolves({ result: { ok: 1 }, matchedCount: 0 });
+
+    it('should register with one write', async function() {
+      fetchSession.resolves(makeSession({ version: 1.2 }));
+      await register();
+      expect(updateOne.callCount).to.equal(1);
+    });
+
+    it('should revalidate after a conflict and refuse a slot that was admitted meanwhile', async function() {
+      conflictOnce();
+      statesInOrder(makeSession({ version: 1.2 }), makeSession({ version: 1.2, joined: [1] }));
+      const err = await rejection(register());
+      expect(err?.code).to.equal('TSS_ROUNDS_ALREADY_STARTED');
+      expect(updateOne.callCount).to.equal(1);
+    });
+
+    it('should retry after a conflict that left the slot open', async function() {
+      conflictOnce();
+      statesInOrder(makeSession({ version: 1.2 }), makeSession({ version: 1.2, registered: [2] }));
+      await register();
+      expect(updateOne.callCount).to.equal(2);
+    });
+
+    it('should report a session deleted meanwhile as not found', async function() {
+      conflictOnce();
+      countDocuments.resolves(0);
+      const err = await rejection(register());
+      expect(err?.code).to.equal('TSS_SESSION_NOT_FOUND');
+    });
+
+    it('should stop retrying a write that can never match', async function() {
+      fetchSession.resolves(makeSession({ version: 1.2 }));
+      updateOne.resolves({ result: { ok: 1 }, matchedCount: 0 });
+      const err = await rejection(register());
+      expect(err?.code).to.equal('TSS_GENERIC_ERROR');
+    });
+  });
+
+  describe('retries after a version conflict', function() {
+    const conflictOnce = () => updateOne.onFirstCall().resolves({ result: { ok: 1 }, matchedCount: 0 });
+    const statesInOrder = (...states: any[]) => {
+      fetchSession.callsFake(async () => states.length > 1 ? states.shift() : states[0]);
+    };
+
+    it('should admit after another slot joined meanwhile', async function() {
+      conflictOnce();
+      statesInOrder(makeSession(), makeSession({ joined: [2] }));
+      await submit(broadcast(1));
+      expect(brokerSend.calledOnce).to.equal(true);
+      expect(updateOne.callCount).to.equal(2);
+    });
+
+    it('should reject when another copayer took the slot meanwhile', async function() {
+      conflictOnce();
+      statesInOrder(makeSession(), makeSession({ joined: [1], participants: ['alice', 'carol', null] }));
+      const err = await rejection(submit(broadcast(1)));
+      expect(err).to.not.equal(undefined);
+      expect(updateOne.callCount).to.equal(1);
+      expect(brokerSend.called).to.equal(false);
+    });
+
+    it('should reject a pending v1.2 join when the creator changed the registered key meanwhile', async function() {
+      conflictOnce();
+      const replaced = makeSession({ version: 1.2, registered: [1] });
+      replaced.authPublicKeys[1] = 'replacement-key';
+      statesInOrder(makeSession({ version: 1.2, registered: [1] }), replaced);
+      const err = await rejection(submit(broadcast(1), 'bob', { version: 1.2 }));
+      expect(err).to.not.equal(undefined);
+      expect(updateOne.callCount).to.equal(1);
+      expect(brokerSend.called).to.equal(false);
+    });
+
+    it('should rerun the ownership check after a conflict', async function() {
+      conflictOnce();
+      const taken = makeSession({ joined: [1, 2] });
+      taken.participants[1] = 'carol';
+      statesInOrder(makeSession({ joined: [1, 2] }), taken);
+      const err = await rejection(submit(p2p(1)));
+      expect(err?.code).to.equal('TSS_NON_PARTICIPANT');
+      expect(updateOne.callCount).to.equal(1);
+      expect(brokerSend.called).to.equal(false);
+    });
+
+    it('should rerun the duplicate check after a conflict', async function() {
+      conflictOnce();
+      const later = makeSession({ joined: [1, 2] });
+      later.rounds[1] = [{ fromPartyId: 1, messages: p2p(1) }];
+      statesInOrder(makeSession({ joined: [1, 2] }), later);
+      const err = await rejection(submit(p2p(1)));
+      expect(err?.code).to.equal('TSS_ROUND_MESSAGE_EXISTS');
+      expect(updateOne.callCount).to.equal(1);
+    });
+
+    it('should report a session deleted meanwhile as not found', async function() {
+      conflictOnce();
+      countDocuments.resolves(0);
+      const err = await rejection(submit(broadcast(1)));
+      expect(err?.code).to.equal('TSS_SESSION_NOT_FOUND');
+      expect(brokerSend.called).to.equal(false);
+    });
+
+    it('should stop retrying a write that can never match', async function() {
+      updateOne.resolves({ result: { ok: 1 }, matchedCount: 0 });
+      const err = await rejection(submit(broadcast(1)));
+      expect(err?.code).to.equal('TSS_GENERIC_ERROR');
+      expect(updateOne.callCount).to.be.within(2, 100);
+      expect(brokerSend.called).to.equal(false);
+    });
+
+    it('should require the admission predicates on the one write', async function() {
+      fetchSession.resolves(makeSession({ version: 1.2, registered: [1] }));
+      await submit(broadcast(1), 'bob', { version: 1.2 });
+      const [filter, update] = updateOne.firstCall.args;
+      expect(filter).to.deep.include({ id: 'session', __v: 0, 'participants.1': null, 'authPublicKeys.1': 'key1' });
+      expect(filter.participants).to.deep.equal({ $ne: 'bob' });
+      expect(update.$set).to.deep.equal({ 'participants.1': 'bob' });
+      expect(update.$inc).to.deep.equal({ __v: 1 });
+    });
+
+    it('should require slot ownership, and no roster change, on a write from an enrolled sender', async function() {
+      fetchSession.resolves(makeSession({ joined: [1, 2] }));
+      await submit(p2p(1));
+      const [filter, update] = updateOne.firstCall.args;
+      expect(filter).to.deep.include({ id: 'session', __v: 0, 'participants.1': 'bob' });
+      expect(filter).to.not.have.property('participants');
+      expect(update).to.not.have.property('$set');
+    });
+
+    it('should reject when the session expired meanwhile', async function() {
+      conflictOnce();
+      const expired = makeSession();
+      expired.createdOn = Date.now() - 2 * 60 * 60 * 1000;
+      expired.timeLimit = 60 * 1000;
+      statesInOrder(makeSession(), expired);
+      const err = await rejection(submit(broadcast(1)));
+      expect(err?.code).to.equal('TSS_SESSION_EXPIRED');
+      expect(updateOne.callCount).to.equal(1);
+    });
+  });
+});
+
 describe('KeyGen admission request shape validators', function() {
   const broadcastItem = (from: number) => ({ from, payload: { message: 'm', signature: 's' } });
   const p2pItem = (from: number, to: number) => ({ from, to, commitment: 'c', payload: { encryptedMessage: 'e', signature: 's' } });
@@ -314,5 +676,43 @@ describe('KeyGen admission request shape validators', function() {
         invalidReg(body);
       });
     }
+  });
+});
+
+describe('KeyGen admission enrolled key lookup', function() {
+  const entry = (fromPartyId: number, publicKey: any) => ({ fromPartyId, messages: { publicKey } as any });
+  const session = (version: number, round0: any[], authPublicKeys: any[] = []) =>
+    Object.assign(new TssKeyGenModel(), { schemeVersion: version, rounds: [round0], authPublicKeys });
+
+  it('should return the one round 0 key for a legacy party', function() {
+    expect(session(1.1, [entry(0, 'k0'), entry(1, 'k1')]).getEnrolledKey(1)).to.equal('k1');
+  });
+
+  it('should look the key up by fromPartyId, not by position', function() {
+    expect(session(1.1, [entry(2, 'k2'), entry(0, 'k0'), entry(1, 'k1')]).getEnrolledKey(1)).to.equal('k1');
+  });
+
+  it('should return undefined when the party has no round 0 message', function() {
+    expect(session(1.1, [entry(0, 'k0')]).getEnrolledKey(1)).to.equal(undefined);
+  });
+
+  it('should return undefined when the mapping is ambiguous', function() {
+    expect(session(1.1, [entry(0, 'k0'), entry(1, 'k1'), entry(1, 'k1')]).getEnrolledKey(1)).to.equal(undefined);
+  });
+
+  it('should return undefined when the key is missing or not a string', function() {
+    for (const publicKey of [undefined, null, '', 5, {}]) {
+      expect(session(1.1, [entry(1, publicKey)]).getEnrolledKey(1)).to.equal(undefined);
+    }
+  });
+
+  it('should require a v1.2 round 0 key to be the registered key', function() {
+    expect(session(1.2, [entry(1, 'k1')], [null, 'k1']).getEnrolledKey(1)).to.equal('k1');
+    expect(session(1.2, [entry(1, 'k1')], [null, 'other']).getEnrolledKey(1)).to.equal(undefined);
+    expect(session(1.2, [entry(1, 'k1')], []).getEnrolledKey(1)).to.equal(undefined);
+  });
+
+  it('should not require a registry for legacy sessions', function() {
+    expect(session(1.1, [entry(1, 'k1')], undefined).getEnrolledKey(1)).to.equal('k1');
   });
 });

@@ -657,6 +657,68 @@ describe('TSS', function() {
     });
   });
 
+  describe('KeyGen admission compatibility', function() {
+    it('should complete 2-of-2 key generation, wallet enrollment and signing', async function() {
+      this.timeout(30_000);
+      const keygens = [0, 1].map(() => new TssKeyGen({
+        chain, network, baseUrl: '/bws/api', request: request(app), key: new Key({ seedType: 'new' })
+      }));
+      const signers: TssSign[] = [];
+      try {
+        await keygens[0].newKey({ m: 2, n: 2 });
+        const code = await keygens[0].createJoinCode({ partyId: 1, partyPubKey: keygens[1].getAuthPublicKey() });
+        await keygens[1].joinKey({ code });
+        const wallets = keygens.map(keygen => new Promise<any>((resolve, reject) => {
+          keygen.once('wallet', resolve);
+          keygen.on('error', reject);
+        }));
+        keygens[0].subscribe({ timeout: 10, walletName: '2-of-2 wallet', copayerName: 'creator' });
+        keygens[1].subscribe({ timeout: 10, copayerName: 'joiner' });
+        const [wallet0, wallet1] = await Promise.all(wallets);
+        wallet0.id.should.equal(wallet1.id);
+        const wallet = await util.promisify(storage.fetchWallet).call(storage, wallet0.id);
+        wallet.copayers.length.should.equal(2);
+        const keys = keygens.map(keygen => keygen.getTssKey());
+        keys[0].keychain.commonKeyChain.should.equal(keys[1].keychain.commonKeyChain);
+
+        const messageHash = BitcoreLib.crypto.Hash.sha256(Buffer.from('2-of-2 admission compatibility'));
+        for (const key of keys) {
+          const client = new Client({ baseUrl: '/bws/api', request: request(app) });
+          client.fromObj(key.createCredentials(null, { chain, network, account: 0 }).toObj());
+          await client.openWallet();
+          client.credentials.walletId.should.equal(wallet0.id);
+          signers.push(new TssSign({
+            baseUrl: '/bws/api', request: request(app), credentials: client.credentials, tssKey: key
+          }));
+        }
+        for (const signer of signers) {
+          await signer.start({ messageHash, derivationPath: 'm/0/0' });
+        }
+        const completed = signers.map(signer => new Promise<void>((resolve, reject) => {
+          signer.once('complete', resolve);
+          signer.on('error', reject);
+        }));
+        for (const signer of signers) {
+          signer.subscribe({ timeout: 10 });
+        }
+        await Promise.all(completed);
+        const signature = signers[0].getSignature();
+        signature.should.deep.equal(signers[1].getSignature());
+        const ecdsaSignature = new BitcoreLib.crypto.Signature({
+          r: BitcoreLib.crypto.BN.fromBuffer(Buffer.from(signature.r.slice(2), 'hex')),
+          s: BitcoreLib.crypto.BN.fromBuffer(Buffer.from(signature.s.slice(2), 'hex'))
+        });
+        const publicKey = BitcoreLib.HDPublicKey(keys[0].getXPubKey()).deriveChild('m/0/0').publicKey;
+        signature.pubKey.should.equal(publicKey.toString());
+        BitcoreLib.crypto.ECDSA.verify(messageHash, ecdsaSignature, publicKey).should.equal(true);
+      } finally {
+        for (const session of [...keygens, ...signers]) {
+          session.unsubscribe();
+        }
+      }
+    });
+  });
+
   describe('Wallets', function() {
     const walletChain = chain.toLowerCase();
     const walletName = 'TSS wallet';

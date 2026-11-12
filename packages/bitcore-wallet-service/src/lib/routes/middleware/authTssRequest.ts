@@ -2,6 +2,7 @@ import express from 'express';
 import { Utils } from '../../common/utils';
 import { ClientError } from '../../errors/clienterror';
 import { Errors } from '../../errors/errordefinitions';
+import { isWellFormedPubKey } from '../../model/tsskeygen';
 import { WalletService, checkRequired } from '../../server';
 import { error } from '../helpers';
 import { getCredentials, getMessage } from './authRequest';
@@ -40,11 +41,17 @@ export function authTssKeyGenRequest(params: { bypassExpired?: boolean } = {}): 
       // Note: the copayer is not fetched from the db here bc it's not stored
       //  until the key generation session is done and the wallet gets created.
 
+      // Only the message POST carries body.message; other KeyGen routes (register, retrieval, delivery, store) don't.
+      const message = body?.message;
+
       const session: TssKeyGenModel = await storage.fetchTssKeyGenSession({ id });
       if (!session) {
         // This is a brand new session. Caller should be party 0 with the initial round message.
         if (body?.message?.round === 0 && body?.message?.partyId === 0) {
           const pubKey = body?.message?.publicKey;
+          if (!isWellFormedPubKey(pubKey)) {
+            throw Errors.NOT_AUTHORIZED.withMessage('Invalid public key');
+          }
           if (!verifyMessage(req, signature, pubKey)) {
             // Self verification, but at least ensures that the caller owns the message's private key
             throw Errors.NOT_AUTHORIZED.withMessage('Invalid signature');
@@ -60,18 +67,17 @@ export function authTssKeyGenRequest(params: { bypassExpired?: boolean } = {}): 
         throw Errors.TSS_SESSION_EXPIRED;
       }
 
-      const message = body?.message;
       if (message && (message.partyId >= session.n ||
         (Array.isArray(message.p2pMessages) && message.p2pMessages.some(m => m.to >= session.n)))) {
         throw Errors.TSS_INVALID_MESSAGE.withMessage('Party ID is out of range for this session');
       }
 
-      const isRound0Msg = body?.message?.round === 0;
+      const isRound0Msg = message?.round === 0;
       const awaitingJoiners = session.participants.some(p => !p); // session.participants is initiated with n slots (initally null) that get populated as participants join
       const participantIdx = session.participants.indexOf(copayerId); // equals -1 if the copayer has not joined yet
       if (participantIdx === -1 && session.schemeVersion >= 1.2) {
         // Check session.authPublicKeys to ensure initiator registered this participant
-        const msgPubKey = body?.message?.publicKey;
+        const msgPubKey = message?.publicKey;
         if (!msgPubKey) {
           throw Errors.NOT_AUTHORIZED;
         }
@@ -86,7 +92,7 @@ export function authTssKeyGenRequest(params: { bypassExpired?: boolean } = {}): 
       const partyId = participantIdx > -1
         ? participantIdx
         : (awaitingJoiners && isRound0Msg)
-          ? body?.message?.partyId // if participant has not joined session yet, use the partyId from the initial round message (verified below)
+          ? message?.partyId // if participant has not joined session yet, use the partyId from the initial round message (verified below)
           : -1;
       
       if (partyId < 0 || partyId >= session.n || !Number.isInteger(partyId)) {
@@ -94,17 +100,22 @@ export function authTssKeyGenRequest(params: { bypassExpired?: boolean } = {}): 
       }
 
       if (message && participantIdx > -1 && message.partyId !== participantIdx) {
+        // The slot belongs to this copayer; it cannot speak for another one
         throw Errors.NOT_AUTHORIZED.withMessage('Copayer does not own this partyId');
       }
 
       let pubKey: string = null;
       if (session?.schemeVersion <= 1.1) {
         // session.authPublicKeys was not added until 1.2, so fetch public key from the first round messages instead (old way)
-        pubKey = session.rounds[0].find(r => r.fromPartyId === partyId)?.messages.publicKey;
-        if (!pubKey && participantIdx === -1) {
+        if (participantIdx > -1) {
+          pubKey = session.getEnrolledKey(partyId);
+        } else if (session.rounds[0]?.some(r => r.fromPartyId === partyId)) {
+          // A vacant slot must not already have a round 0 message
+          throw Errors.NOT_AUTHORIZED.withMessage('Copayer not found in session');
+        } else if (isWellFormedPubKey(message?.publicKey)) {
           // Joining party hasn't submitted its round 0 message yet and legacy sessions have no registration,
           //  so use the joining message's public key (verifyTssMessage verifies the message's payload against it)
-          pubKey = body?.message?.publicKey;
+          pubKey = message.publicKey;
         }
       } else {
         // authPublicKeys is set by the session leader, so this will verify that the leader and the calling participant here are on the same page

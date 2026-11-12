@@ -10,10 +10,39 @@ If the DKG ceremony is executed asynchronously (meaning all parties are not onli
 
 ### API Spec
 
-Keygen message requests require numeric, non-negative safe-integer party IDs and rounds `0..3`.
-Every nested sender must match the outer party ID, and P2P recipients must be different valid session slots.
-An enrolled caller must submit its own party ID. Registration requires a numeric slot `1..n-1`
-and a well-formed request public key. Numeric strings are rejected rather than coerced.
+Key-generation scheme 1.3 introduces encrypted wallet join deliveries. BWS continues to accept
+schemes 1.0–1.2, including clients that omit the version (treated as 1.0). All participants in a
+session must use the same scheme; mismatches are rejected when joining, before DKG proceeds.
+
+The `/v1/tss/keygen/:id/secret` contract is selected by the request fields:
+
+- Updated clients POST `{ chain, network, secrets }`, where `secrets` maps each joining party's
+  numeric slot or keygen copayer ID to a hex-encoded ECIES ciphertext. The creator encrypts each
+  wallet join secret with its request private key and the recipient's request public key.
+  BWS stores one map per chain/network and requires exactly one entry for every slot `1..n-1`.
+- GET `/v1/tss/keygen/:id/secret?chain=eth&network=livenet` returns `{ secret }`, containing only
+  the authenticated recipient's ciphertext for that wallet. It never falls back to a legacy
+  plaintext secret if that chain/network delivery is absent. The client decrypts the ciphertext
+  using its request private key and the creator's trusted public key.
+- Legacy POST `{ secret }` and GET without chain/network remain supported, including on scheme
+  1.3 sessions. This format stores and returns plaintext at BWS. It coexists with encrypted maps;
+  an older keygen session can also acquire encrypted deliveries for sibling wallets.
+
+Only the creator can publish either format, and every request must be authenticated. Secret
+publication and retrieval remain available after keygen expiry so parties can create or join
+sibling wallets later. Keygen round submission, registration, retrieval and key storage still
+reject expired sessions. Updated clients use encrypted deliveries; the obsolete signed
+`{ records: [...] }` body is not supported.
+
+Invitations register the recipient's request public key before returning the join code.
+Session exports retain the invitation key roster for restoration and subsequent wallet enrollment;
+store exports securely and restore them with a compatible client version.
+
+Keygen messages require numeric, non-negative safe-integer party IDs and rounds `0..3`.
+Every nested sender must match the outer party ID, and P2P recipients must be valid slots different from the sender.
+Registration requires a numeric slot `1..n-1` and a well-formed request public key. Each accepted
+message is bound to the slot owner and its established key; from scheme 1.2 the key must also
+match the creator's registration. Enrollment and the first round-zero message commit atomically.
 
 <details>
 <summary style="font-size:17px"><span style="font-weight:bold">POST</span> /v1/tss/keygen/:id</summary>
@@ -31,7 +60,8 @@ Initialize the `KeyGen` class with a seed that is the derived private key.
 {
   message: object, // Message object from the TSS keygen initJoin() or nextRound() methods
   n?: number, // Number of participants. Only provided by party 0 when initiating the session
-  password?: string // Optional join password set by party 0 when initiating the session
+  password?: string, // Optional join password set by party 0 when initiating the session
+  version?: number // Key-generation scheme version; omitted by legacy clients, defaulting to 1.0
 }
 ```
 

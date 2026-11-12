@@ -3,9 +3,11 @@
 import * as chai from 'chai';
 import 'chai/register-should';
 import mongodb from 'mongodb';
+import sinon from 'sinon';
 import util from 'util';
 import { Storage } from '../src/lib/storage';
 import * as Model from '../src/lib/model';
+import { TssKeyGenModel } from '../src/lib/model/tsskeygen';
 import config from './test-config';
 import helpers from './integration/helpers';
 
@@ -517,4 +519,138 @@ describe('Storage', function() {
 
 
   });
+
+  describe('KeyGen admission', function() {
+    const id = 'keygen-session';
+    const message = (overrides: object = {}) => ({
+      round: 0, partyId: 1, publicKey: 'key1', broadcastMessages: [], p2pMessages: [], ...overrides
+    });
+    let updateOne: sinon.SinonSpy;
+
+    const storeSession = async () => {
+      const doc = TssKeyGenModel.create({ id, message: message({ partyId: 0, publicKey: 'key0' }) as any, n: 3, copayerId: 'alice', version: 1.2 });
+      await storage.storeTssKeyGenSession({ doc });
+    };
+    const rawSession = () => storage.db.collection(Storage.collections.TSS_KEYGEN).findOne({ id });
+    const bytes = (doc: object): Buffer => new (require('bson'))().serialize(doc);
+
+    beforeEach(async function() {
+      await storeSession();
+      updateOne = sinon.spy(Object.getPrototypeOf(storage.db.collection(Storage.collections.TSS_KEYGEN)), 'updateOne');
+    });
+
+    afterEach(function() {
+      updateOne.restore();
+    });
+
+    const rejectsWithoutUpdate = async (write: () => Promise<any>) => {
+      const before = await rawSession();
+      let error: any;
+      try {
+        await write();
+      } catch (e) {
+        error = e;
+      }
+      should.exist(error, 'expected the write to be rejected');
+      updateOne.callCount.should.equal(0, 'the write reached MongoDB');
+      bytes(await rawSession()).equals(bytes(before)).should.equal(true, 'stored session changed');
+    };
+
+    const write = (overrides: object = {}, params: { __v?: number; copayerId?: string; isAdmission?: boolean; registeredKey?: string } = {}) =>
+      storage.storeTssKeyGenMessage({
+        id, message: message(overrides) as any, __v: 0, copayerId: 'bob', isAdmission: true, ...params
+      });
+    const setSlot = (fields: object) => storage.db.collection(Storage.collections.TSS_KEYGEN).updateOne({ id }, { $set: fields });
+    const expectNoMatch = async (attempt: Promise<any>) => {
+      const before = await rawSession();
+      const err = await attempt.then(() => undefined, e => e);
+      should.exist(err, 'expected the write not to match');
+      err.message.should.match(/^MONGO_DOC_OUTDATED/);
+      bytes(await rawSession()).equals(bytes(before)).should.equal(true, 'stored session changed');
+    };
+
+    for (const round of ['00', '01', -1, 1.5, NaN, 2 ** 53, null, undefined]) {
+      it(`should not write a message for round ${String(round)}`, async function() {
+        await rejectsWithoutUpdate(() => write({ round }));
+      });
+    }
+
+    for (const partyId of ['00', '01', -1, 1.5, NaN, 2 ** 53, null, undefined]) {
+      it(`should not write a message, or enroll a participant, for party ${String(partyId)}`, async function() {
+        await rejectsWithoutUpdate(() => write({ partyId }));
+      });
+    }
+
+    for (const partyId of ['01', -1, 1.5, NaN, 2 ** 53, null, undefined]) {
+      it(`should not write an auth key for party ${String(partyId)}`, async function() {
+        await rejectsWithoutUpdate(() => storage.storeTssKeyGenAuthPublicKey({ id, partyId: partyId as any, authPublicKey: 'key1', __v: 0 }));
+      });
+    }
+
+    it('should enroll the participant and append its message in one update that increments the version once', async function() {
+      await setSlot({ 'authPublicKeys.1': 'key1' });
+      updateOne.resetHistory();
+      await write({}, { registeredKey: 'key1' });
+      updateOne.callCount.should.equal(1);
+      const doc = await rawSession();
+      doc.__v.should.equal(1);
+      doc.participants.should.deep.equal(['alice', 'bob', null]);
+      doc.rounds[0].map(r => r.fromPartyId).should.deep.equal([0, 1]);
+    });
+
+    it('should append only the message, leaving the roster alone, for the slot owner', async function() {
+      await setSlot({ 'participants.1': 'bob' });
+      await write({ round: 1 }, { __v: 0, isAdmission: false });
+      const doc = await rawSession();
+      doc.__v.should.equal(1);
+      doc.participants.should.deep.equal(['alice', 'bob', null]);
+      doc.rounds[1].map(r => r.fromPartyId).should.deep.equal([1]);
+    });
+
+    it('should leave both the participant and the message absent when the update fails before committing', async function() {
+      const before = await rawSession();
+      updateOne.restore();
+      const failing = sinon.stub(Object.getPrototypeOf(storage.db.collection(Storage.collections.TSS_KEYGEN)), 'updateOne').rejects(new Error('injected failure'));
+      try {
+        const err = await write().then(() => undefined, e => e);
+        err.message.should.equal('injected failure');
+      } finally {
+        failing.restore();
+        updateOne = sinon.spy(Object.getPrototypeOf(storage.db.collection(Storage.collections.TSS_KEYGEN)), 'updateOne');
+      }
+      bytes(await rawSession()).equals(bytes(before)).should.equal(true, 'stored session changed');
+    });
+
+    it('should change nothing when the version is stale', async function() {
+      await expectNoMatch(write({}, { __v: 7 }));
+      await expectNoMatch(write({}, { __v: 7, isAdmission: false, copayerId: 'alice' }));
+    });
+
+    it('should not admit into a slot another copayer already holds, even at the observed version', async function() {
+      await setSlot({ 'participants.1': 'carol' });
+      await expectNoMatch(write());
+    });
+
+    it('should not admit a copayer that already holds another slot', async function() {
+      await setSlot({ 'participants.2': 'bob' });
+      await expectNoMatch(write());
+    });
+
+    it('should not append for a sender that does not own the slot', async function() {
+      await setSlot({ 'participants.1': 'carol' });
+      await expectNoMatch(write({ round: 1 }, { isAdmission: false }));
+    });
+
+    it('should not admit when the registered key for the slot is no longer the submitted key', async function() {
+      await setSlot({ 'authPublicKeys.1': 'replacement' });
+      await expectNoMatch(write({}, { registeredKey: 'key1' }));
+    });
+
+    it('should report a missing session distinctly from a conflict', async function() {
+      const err = await storage.storeTssKeyGenMessage({ id: 'unknown', message: message() as any, __v: 0, copayerId: 'bob', isAdmission: true })
+        .then(() => undefined, e => e);
+      err.message.should.match(/^MONGO_DOC_NOT_FOUND/);
+    });
+  });
+
 });
