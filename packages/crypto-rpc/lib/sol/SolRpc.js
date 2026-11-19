@@ -220,7 +220,7 @@ export class SolRpc {
    * @param {Object} input
    * @param {string} [input.nonceAddressStr]
    * @param {string} [input.nonceAuthorityAddressStr]
-   * @param {import('@solana/kit').ITransactionMessageWithFeePayerSigner<any>} input.transactionMessage
+   * @param {import('@solana/kit').TransactionMessage & import('@solana/kit').TransactionMessageWithFeePayerSigner} input.transactionMessage
    * @private
    */
   async #setTransactionMessageLifetime({ nonceAddressStr, nonceAuthorityAddressStr, transactionMessage }) {
@@ -243,10 +243,10 @@ export class SolRpc {
   }
 
   async #appendComputeUnitLimitInstruction(transactionMessage) {
-    const getComputeUnitEstimate = SolKit.getComputeUnitEstimateForTransactionMessageFactory({ rpc: this.rpc });
-    const estimatedComputeUnits = await getComputeUnitEstimate(transactionMessage);
+    const estimateResourceLimits = SolKit.estimateResourceLimitsFactory({ rpc: this.rpc });
+    const { computeUnitLimit } = await estimateResourceLimits(transactionMessage);
     const transactionMessageWithComputeUnitLimit = SolKit.appendTransactionMessageInstruction(
-      SolComputeBudget.getSetComputeUnitLimitInstruction({ units: estimatedComputeUnits }),
+      SolComputeBudget.getSetComputeUnitLimitInstruction({ units: computeUnitLimit }),
       transactionMessage
     );
     return transactionMessageWithComputeUnitLimit;

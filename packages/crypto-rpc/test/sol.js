@@ -697,7 +697,14 @@ describe('SOL Tests', () => {
         const { value: [statusAfter] } = await solRpc.rpc.getSignatureStatuses([txid]).send();
         const processedTip = await solRpc.rpc.getSlot({ commitment: 'processed' }).send();
         expect(tx.status).to.be.oneOf([statusBefore.confirmationStatus, statusAfter.confirmationStatus]);
-        expect(tx.confirmations).to.be.a('number').within(0, Number(processedTip - BigInt(tx.slot)));
+        // A validator's vote count can include the transaction's slot itself. Bound the result by
+        // both the observed statuses and the slot distance used when the status has no count.
+        const maxConfirmations = Math.max(
+          Number(processedTip - BigInt(tx.slot)),
+          Number(statusBefore.confirmations ?? 0),
+          Number(statusAfter.confirmations ?? 0)
+        );
+        expect(tx.confirmations).to.be.a('number').within(0, maxConfirmations);
       });
 
       it('returns null for a txid that is not base58', async () => {
@@ -1124,7 +1131,7 @@ describe('SOL Tests', () => {
             await solRpc.deriveAta({ mintAddress: mintKeypair.address });
             assert.fail('Test failed: deriveAta did not throw as expected');
           } catch (err) {
-            expect(err.message).to.equal('Cannot read properties of undefined (reading \'length\')');
+            expect(err).to.be.instanceOf(TypeError);
           }
         });
         it('returns a string even if mint address does not correspond to a valid mint', async () => {
@@ -1770,7 +1777,7 @@ describe('SOL Tests', () => {
         });
 
         const realInstruction = SolToken.getCreateAssociatedTokenInstruction({
-          payer: mockSenderAddress,
+          payer: SolKit.createNoopSigner(mockSenderAddress),
           ata: ataAddress,
           owner: ownerKeypair.address,
           mint: mintKeypair.address
@@ -1801,7 +1808,7 @@ describe('SOL Tests', () => {
 
         // Create a real CreateAssociatedTokenIdempotent instruction using the SDK
         const realInstruction = SolToken.getCreateAssociatedTokenIdempotentInstruction({
-          payer: mockSenderAddress,
+          payer: SolKit.createNoopSigner(mockSenderAddress),
           ata: ataAddress,
           owner: ownerKeypair.address,
           mint: mintKeypair.address
@@ -1895,7 +1902,7 @@ describe('SOL Tests', () => {
         });
 
         const solTransferInstruction = SolSystem.getTransferSolInstruction({
-          source: mockSenderAddress,
+          source: SolKit.createNoopSigner(mockSenderAddress),
           destination: mockReceiverAddress,
           amount: 1000000n // 1M lamports
         });
@@ -2363,8 +2370,8 @@ async function createLookupTable({ solRpc, fromKeypair, toKeypair, addresses = [
     // Add address (note: signers may be leverage lookup tables - their full address must be serialized in the transaction)
     const extendLookupTableInstruction = SolLookUpTable.getExtendLookupTableInstruction({
       address: lookupTableAddress,
-      payer: fromKeypair.address,
-      authority: fromKeypair.address,
+      payer: fromKeypair,
+      authority: fromKeypair,
       addresses
     });
 
