@@ -1519,6 +1519,9 @@ describe('Verifier', function() {
       const raw = Utils.buildTx(txp).uncheckedSerialize()[0];
       const decoded = SolKit.getTransactionDecoder().decode(Buffer.from(raw, 'base64'));
       const message = SolKit.getCompiledTransactionMessageDecoder().decode(decoded.messageBytes);
+      if (message.version === 1) {
+        throw new Error('Expected a legacy or v0 SOL transaction');
+      }
       message.staticAccounts[message.instructions[0].programAddressIndex].should.equal('11111111111111111111111111111111');
       Verifier.checkPaypro(txp, paypro).should.equal(false);
     });

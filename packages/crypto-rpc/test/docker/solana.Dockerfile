@@ -1,6 +1,6 @@
 FROM node:24.22.3-bullseye
 WORKDIR /crypto-rpc
-RUN  npm install @solana/kit
+RUN  npm install @solana/kit@8.6.0
 
 # Use the official Solana image
 FROM solanalabs/solana:v1.18.26

@@ -1,5 +1,5 @@
 // @solana/kit 2.3 renamed a lookup's writableIndices and readableIndices to writableIndexes and readonlyIndexes;
-// crypto-wallet-core pins kit 2.1, which uses the old names
+// Accept the current names and older decoded messages that use the 2.1 names.
 const writableIndexesOf = lookup => lookup.writableIndexes ?? lookup.writableIndices;
 const readonlyIndexesOf = lookup => lookup.readonlyIndexes ?? lookup.readableIndices;
 

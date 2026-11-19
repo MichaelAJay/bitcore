@@ -25,7 +25,7 @@ export class SOLTxProvider {
     priorityFee?: number;
     computeUnits?: number;
     memo?: string;
-    txInstructions?: Array<SolKit.BaseTransactionMessage['instructions'][number]>;
+    txInstructions?: Array<SolKit.TransactionMessage['instructions'][number]>;
     // account creation fields
     fromKeyPair?: any;
     space?: number; // amount of space to reserve a new account in bytes
@@ -72,10 +72,7 @@ export class SOLTxProvider {
             transferInstructions.push(SolSystem.getTransferSolInstruction({
               amount: BigInt(recipientAmount),
               destination: SolKit.address(recipientAddress),
-              source: {
-                address: fromAddress,
-                signTransactions: async () => []
-              } as SolKit.TransactionPartialSigner
+              source: SolKit.createNoopSigner(fromAddress)
             }));
           }
         }
@@ -92,7 +89,10 @@ export class SOLTxProvider {
           });
           transferInstructions.push(memoInstruction);
         }
-        const transferTxMessage = SolKit.appendTransactionMessageInstructions(transferInstructions, lifetimeConstrainedTx);
+        const transferTxMessage = SolKit.appendTransactionMessageInstructions(
+          transferInstructions,
+          lifetimeConstrainedTx as SolKit.TransactionMessage & SolKit.TransactionMessageWithFeePayer
+        );
         const compiledTx = SolKit.compileTransaction(transferTxMessage);
         return SolKit.getBase64EncodedWireTransaction(compiledTx);
       case 'createaccount':
@@ -132,7 +132,7 @@ export class SOLTxProvider {
         }
         const completeMessage = SolKit.appendTransactionMessageInstructions(
           createAccountInstructions,
-          lifetimeConstrainedTx
+          lifetimeConstrainedTx as SolKit.TransactionMessage & SolKit.TransactionMessageWithFeePayer
         );
         const compiled = SolKit.compileTransaction(completeMessage);
         return SolKit.getBase64EncodedWireTransaction(compiled);

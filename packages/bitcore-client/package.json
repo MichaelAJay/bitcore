@@ -68,7 +68,7 @@
     "mocha": "11.1.0",
     "sinon": "19.0.2",
     "supertest": "7.0.0",
-    "typescript": "5.7.3"
+    "typescript": "5.9.3"
   },
   "gitHead": "e091d99915d099863ad3e78dbe867aa7780191e4"
 }
